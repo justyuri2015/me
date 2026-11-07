@@ -423,7 +423,7 @@
     }
 
     // 浮动：算出输入什么值能让平力上浮/下浮
-    // 统一使用数学公式：上浮 P + |P|*ratio，下浮 P - |P|*ratio
+    // 使用统一公式：上浮 P + |P|*ratio，下浮 P - |P|*ratio
     function calcFloat(s, ratio) {
       const P = s.pingLi;
       const d = s.sheng - s.ri;
@@ -551,7 +551,7 @@
       const pingLi = longxia === 0 ? 0 : f / Math.abs(longxia);
       const maPing = ma === 0 ? 0 : (f + tf) / ma;
       const zhongLi = f + tf;
-      const zhongPingLi = longxia === 0 ? 0 : zhongLi / longxia;
+      const zhongPingLi = longxia === 0 ? 0 : zhongLi / Math.abs(longxia); // 修正：除以龙虾的绝对值
 
       return {
         ma, longxia, yingSheng, f, pingLi, tf, shengPct, sheng, ri,
@@ -1230,7 +1230,7 @@
       }
 
       if ('zhongPingLi' in changed && !('maPing' in changed) && !('tf' in changed) && !('zhongLi' in changed)) {
-        const lx = newBase.sheng - newBase.ri;
+        const lx = Math.abs(newBase.sheng - newBase.ri); // 修正：绝对值
         if (lx !== 0) {
           const zhongLi = changed.zhongPingLi * lx;
           newBase.tf = zhongLi - newBase.f;

@@ -1,0 +1,2254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0d0d0d" />
+  <meta name="description" content="生日统计规则 App" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <title>生日统计</title>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --card: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #e8e8e8;
+      --muted: #888;
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --input-bg: #222;
+      --chart-zoom: 1;
+      --unmatched-zoom: 1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      font-size: 15px;
+      line-height: 1.4;
+      overscroll-behavior: none;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    
+    /* 屏幕四边泛光 */
+    .screen-glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+    }
+    .screen-glow.red {
+      box-shadow: inset 0 0 50px 15px rgba(239, 68, 68, 0.8);
+      opacity: 1;
+    }
+    .screen-glow.green {
+      box-shadow: inset 0 0 50px 15px rgba(34, 197, 94, 0.8);
+      opacity: 1;
+    }
+    .screen-glow.fade-out {
+      opacity: 0;
+      transition: opacity 0.5s ease-out;
+    }
+
+    .main { flex: 1; overflow-y: auto; padding: 12px 14px 20px; -webkit-overflow-scrolling: touch; }
+
+    /* 全局颜色类 */
+    .num-pos { color: #ef4444; }
+    .num-neg { color: #22c55e; }
+    .num-zero { color: var(--text); }
+
+    .chart-area {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 10px 10px;
+      margin-bottom: 12px;
+    }
+    .chart-area.hidden { display: none; }
+    .chart-item + .chart-item { margin-top: 6px; }
+    .chart-item-title {
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 2px;
+      padding-left: 2px;
+    }
+    .chart-canvas {
+      display: block;
+      width: 100%;
+      height: calc(80px * var(--chart-zoom, 1));
+    }
+    .chart-area.mode-single .chart-canvas {
+      height: calc(180px * var(--chart-zoom, 1));
+    }
+
+    /* 图表缩放工具栏（曲线 & 未抵消共用） */
+    .chart-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .zoom-btn, .zoom-label-btn {
+      background: #2a2a2a;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      cursor: pointer;
+      padding: 0;
+      user-select: none;
+      transition: opacity 0.15s, transform 0.1s, background-color 0.15s;
+    }
+    .zoom-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .zoom-label-btn {
+      min-width: 48px;
+      height: 28px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      letter-spacing: 0.3px;
+    }
+    .zoom-btn:active, .zoom-label-btn:active { transform: scale(0.94); }
+    .zoom-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .zoom-btn:hover, .zoom-label-btn:hover { background: #333; }
+
+    .float-area {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+    .float-area.hidden { display: none; }
+    .float-area .float-row {
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      white-space: nowrap;
+      overflow-x: auto;
+      color: var(--text);
+    }
+
+    .unmatched-area {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 12px 10px;
+      margin-bottom: 12px;
+    }
+    .unmatched-area.hidden { display: none; }
+    .unmatched-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: calc(6px * var(--unmatched-zoom, 1));
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-size: calc(15px * var(--unmatched-zoom, 1));
+      line-height: 1.25;
+    }
+    .unmatched-list span {
+      background: #2a2a2a;
+      padding: calc(2px * var(--unmatched-zoom, 1)) calc(8px * var(--unmatched-zoom, 1));
+      border-radius: 4px;
+    }
+    /* "全部抵消完成"提示不需要跟随缩放 */
+    .unmatched-list span.unmatched-empty {
+      background: transparent;
+      padding: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .recent-box {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px 14px; margin-bottom: 12px;
+    }
+    .recent-list {
+      display: flex; flex-wrap: wrap; gap: 3px;
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-size: 11px; font-weight: 600; letter-spacing: 0;
+      min-height: 20px; align-items: center;
+    }
+    .recent-list .win {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.15);
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    .recent-list .lose {
+      color: #22c55e;
+      background: rgba(34, 197, 94, 0.15);
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    .recent-list .empty { color: var(--muted); font-size: 12px; font-weight: 400; }
+    .output-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px;
+      font-family: "SF Mono", "Menlo", "Consolas", "PingFang SC", monospace;
+      font-size: 17.5px;
+      line-height: 1.65; white-space: pre-wrap; word-break: break-all;
+      margin-bottom: 14px; min-height: 220px;
+    }
+    .output-card .num-big { font-weight: 700; font-size: 1.18em; }
+    .output-card .preview-pingli { color: #eab308; font-size: 0.98em; }
+    .output-card .preview-win { color: #ef4444; font-weight: 700; font-size: 1.3em; }
+    .output-card .preview-lose { color: #22c55e; font-weight: 700; font-size: 1.3em; }
+
+    .recent-detail {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 0 12px; margin-bottom: 14px; max-height: 220px;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-size: 13px; line-height: 22px;
+    }
+    .recent-detail .detail-row {
+      display: grid; grid-template-columns: 1fr 1fr 24px;
+      gap: 6px; align-items: center; height: 22px;
+      position: relative;
+    }
+    /* 龙虾归零时的分割线：画在顶部 */
+    .recent-detail .detail-row.zero-lx-line::before {
+      content: '';
+      position: absolute;
+      left: -12px;
+      right: -12px;
+      top: -1px;
+      height: 2px;
+      background-color: #eab308;
+      z-index: 1;
+    }
+    .recent-detail .d-in { text-align: left; color: var(--text); }
+    .recent-detail .d-f { text-align: right; color: var(--text); }
+    .recent-detail .d-in.pos,
+    .recent-detail .d-f.pos { color: #ef4444; }
+    .recent-detail .d-in.neg,
+    .recent-detail .d-f.neg { color: #22c55e; }
+    .recent-detail .d-sign { text-align: right; font-weight: 700; }
+    .recent-detail .d-sign.pos { color: #ef4444; }
+    .recent-detail .d-sign.neg { color: #22c55e; }
+    .recent-detail .detail-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 6px 0; }
+
+    .check-msg {
+      background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+      padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #94a3b8;
+    }
+    .check-msg.error { background: #450a0a; border-color: #7f1d1d; color: #fca5a5; }
+    .check-msg.ok { background: #052e16; border-color: #166534; color: #86efac; }
+    .input-area {
+      background: var(--card); border-top: 1px solid var(--border);
+      padding: 12px 14px 16px; position: sticky; bottom: 0;
+    }
+    .input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    #numInput {
+      flex: 1; background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 18px;
+      padding: 12px 14px; outline: none; text-align: center; font-weight: 500;
+      transition: border-color 0.2s, color 0.2s, background-color 0.2s;
+    }
+    #numInput:focus { border-color: var(--accent); }
+    
+    /* 错误状态：红色高亮和震动动画 */
+    @keyframes shake {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      50% { transform: translateX(6px); }
+      75% { transform: translateX(-6px); }
+      100% { transform: translateX(0); }
+    }
+    #numInput.error {
+      border-color: var(--red);
+      color: var(--red);
+      background-color: rgba(239, 68, 68, 0.1);
+      animation: shake 0.3s ease;
+    }
+
+    .btn {
+      border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+      padding: 12px 16px; cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s; user-select: none;
+    }
+    .btn:active { transform: scale(0.96); opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #fff; flex: 0 0 auto; min-width: 72px; }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .btn-row .btn { font-size: 13px; padding: 10px 6px; }
+    .btn-secondary { background: #2a2a2a; color: var(--text); font-size: 13px; padding: 10px 6px; }
+    .btn-danger { background: #3f1a1a; color: #fca5a5; }
+    .btn-success { background: #1a3f2a; color: #86efac; }
+    .btn-warn { background: #3f351a; color: #fde68a; }
+    .btn-redo { background: #1e2a3f; color: #93c5fd; }
+    .btn-chart { background: #1a2f3f; color: #7dd3fc; }
+    .btn-panel { background: #2a1f3f; color: #c4b5fd; }
+    .btn-panel.active { background: #4c1d95; color: #e9d5ff; }
+
+    .toolbar-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .toolbar-grid .btn {
+      font-size: 12px;
+      padding: 9px 6px;
+    }
+    .toolbar-grid.panel-hidden {
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+    }
+    .toolbar-grid.panel-hidden .col-2,
+    .toolbar-grid.panel-hidden .col-3 {
+      display: none;
+    }
+
+    .hint { text-align: center; font-size: 11px; color: var(--muted); margin-top: 8px; }
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: flex-end; justify-content: center;
+      z-index: 100; padding: 16px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--card); border-radius: 16px 16px 12px 12px;
+      width: 100%; max-width: 420px; max-height: 85vh; overflow-y: auto;
+      padding: 18px 16px 20px;
+    }
+    .modal h3 { font-size: 16px; margin-bottom: 12px; text-align: center; }
+    .modal p { font-size: 13px; color: var(--muted); margin-bottom: 14px; text-align: center; line-height: 1.5; }
+    .modal .btn-row { grid-template-columns: 1fr 1fr; }
+    .modal .btn-row .btn { font-size: 13px; padding: 10px 6px; }
+    
+    /* 普通提示框 */
+    .toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(30,30,30,0.95);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      z-index: 200;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      pointer-events: none;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+    .toast.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    /* 放大3倍的气泡框（调整减小1号） */
+    .toast.bubble {
+      background: #e0f2fe;
+      color: #0c4a6e;
+      padding: 30px 50px;
+      border-radius: 18px;
+      font-size: 38px;
+      font-weight: bold;
+      border: 2px solid #bae6fd;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .toast.bubble span.pos { color: #ef4444; font-size: 41px; }
+    .toast.bubble span.neg { color: #22c55e; font-size: 41px; }
+    
+    .count-badge {
+      display: inline-block; background: #333; border-radius: 6px;
+      padding: 2px 7px; font-size: 11px; color: var(--muted); margin-left: 6px;
+    }
+    #fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; z-index: -1; }
+    .modal textarea {
+      width: 100%; height: 140px; background: var(--input-bg);
+      border: 1px solid var(--border); border-radius: 10px; color: var(--text);
+      padding: 10px; font-size: 12px; font-family: monospace;
+      resize: vertical; margin-bottom: 12px;
+    }
+    .modal .tip { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
+
+    .state-edit-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 8px; margin-bottom: 12px;
+    }
+    .state-edit-item {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .state-edit-item label {
+      font-size: 11px; color: var(--muted);
+      padding-left: 2px;
+    }
+    .state-edit-item input {
+      background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); padding: 8px 10px;
+      font-size: 14px; text-align: center; outline: none; width: 100%;
+    }
+    .state-edit-item input:focus { border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="screen-glow" id="screenGlow"></div>
+
+  <div class="main">
+    <div class="chart-area" id="chartArea">
+      <div class="chart-toolbar">
+        <button class="zoom-btn" id="zoomOutBtn" aria-label="缩小图表" title="缩小">−</button>
+        <button class="zoom-label-btn" id="zoomLabelBtn" title="点击重置为 100%">100%</button>
+        <button class="zoom-btn" id="zoomInBtn" aria-label="放大图表" title="放大">+</button>
+      </div>
+      <div class="chart-item" id="chartItemA">
+        <div class="chart-item-title">力 + 总力</div>
+        <canvas id="chartA" class="chart-canvas"></canvas>
+      </div>
+      <div class="chart-item" id="chartItemB">
+        <div class="chart-item-title">龙虾</div>
+        <canvas id="chartB" class="chart-canvas"></canvas>
+      </div>
+    </div>
+    <div class="float-area hidden" id="floatArea"></div>
+    <div class="unmatched-area hidden" id="unmatchedArea">
+      <div class="chart-toolbar">
+        <button class="zoom-btn" id="unmatchedZoomOutBtn" aria-label="缩小未抵消数值" title="缩小">−</button>
+        <button class="zoom-label-btn" id="unmatchedZoomLabelBtn" title="点击重置为 100%">100%</button>
+        <button class="zoom-btn" id="unmatchedZoomInBtn" aria-label="放大未抵消数值" title="放大">+</button>
+      </div>
+      <div class="unmatched-list" id="unmatchedList"></div>
+    </div>
+
+    <div class="recent-box">
+      <div class="recent-list" id="recentList"><span class="empty">暂无记录</span></div>
+    </div>
+
+    <div id="checkArea"></div>
+    <div class="output-card" id="output">马：0 马平：0 浮虾：+0/-0
+饭：0 洞：0
+龙虾：0 应生：0 圣：0.00
+力：0 平力：0
+总力：0 实力：0
+终力：0 终平力：0
+10%：0(0/0),0(0/0)
+最力：0 最趴：0
+大生：0 大日：-0 当生：0 当日：-0
+生：0 日：-0
+生多：+0 日多：-0</div>
+
+    <div class="recent-detail" id="recentDetail">
+      <div class="detail-empty">暂无记录</div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-row">
+      <input type="text" id="numInput" inputmode="decimal" placeholder="输入数值" autocomplete="off" enterkeyhint="done" />
+      <button class="btn btn-primary" id="submitBtn">确认</button>
+    </div>
+    <div class="toolbar-grid" id="toolbarGrid">
+      <button class="btn btn-warn" id="undoBtn">撤</button>
+      <button class="btn btn-secondary col-2" id="stateEditBtn">编辑状态</button>
+      <button class="btn btn-secondary col-3" id="freeEditBtn">自由编辑</button>
+
+      <button class="btn btn-redo" id="redoBtn">重</button>
+      <button class="btn btn-secondary col-2" id="exportBtn">导出文件</button>
+      <button class="btn btn-secondary col-3" id="importBtn">导入文件</button>
+
+      <button class="btn btn-chart" id="chartBtn">隐藏</button>
+      <button class="btn btn-danger col-2" id="resetBtn">清空</button>
+
+      <button class="btn btn-panel" id="panelBtn">版</button>
+    </div>
+    <div class="hint">数据自动保存在本机 · 导出可生成文件保存</div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".json,application/json,text/plain,.txt" />
+
+  <div class="modal-overlay" id="exportModal">
+    <div class="modal">
+      <h3>导出数据</h3>
+      <div class="tip">如果手机没有弹出下载，请用下面「复制内容」，把文字保存到备忘录或文件里。</div>
+      <textarea id="exportText" readonly></textarea>
+      <div class="btn-row" style="margin-bottom:8px">
+        <button class="btn btn-secondary" id="copyExport">复制内容</button>
+        <button class="btn btn-primary" id="doExport">尝试下载文件</button>
+      </div>
+      <button class="btn btn-secondary" id="closeExport" style="width:100%">关闭</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="importModal">
+    <div class="modal">
+      <h3>导入数据</h3>
+      <div class="tip">方式一：点下面按钮选择之前导出的 .json 文件<br>方式二：把备份内容粘贴到下面文本框，再点「从文本导入」</div>
+      <button class="btn btn-primary" id="pickFileBtn" style="width:100%;margin-bottom:12px">选择本地文件</button>
+      <textarea id="importText" placeholder="或者把备份的 JSON 内容粘贴到这里..."></textarea>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="closeImport">取消</button>
+        <button class="btn btn-primary" id="doImportText">从文本导入</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="stateEditModal">
+    <div class="modal">
+      <h3>编辑状态</h3>
+      <div class="tip">智能编辑：修改任意项目，会自动按公式反推相关项，保证各项目相互对应。保存后作为新起点。</div>
+      <div class="state-edit-grid" id="stateEditGrid"></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="closeStateEdit">取消</button>
+        <button class="btn btn-primary" id="saveStateEdit">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="freeEditModal">
+    <div class="modal">
+      <h3>自由编辑</h3>
+      <div class="tip">直接设置所有项目数值，<b>不做任何反推</b>，可设置互不对应的状态。保存后这些值即为当前显示值，作为新起点；之后新输入将在此基础上继续累积（派生字段按公式重算）。</div>
+      <div class="state-edit-grid" id="freeEditGrid"></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="closeFreeEdit">取消</button>
+        <button class="btn btn-primary" id="saveFreeEdit">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ========== 核心状态 ==========
+    let inputs = [];
+    let outputHistory = [];
+    let redoStack = [];
+    let previewData = null;
+    let lxHistory = [];
+
+    let baseState = {
+      sheng: 0, ri: 0, dangSheng: 0, dangRi: 0,
+      daSheng: 0, daRi: 0, maxShengDuo: 0, maxRiDuo: 0,
+      f: 0, tf: 0, fan: 0, dong: 0, lastSign: 0,
+      maxZuiLi: 0, minZuiPa: 0,
+      _freeze: false,
+      ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+      shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0
+    };
+
+    let chartMode = 0;
+    const CHART_MODE_LABELS = ["隐藏", "双图", "力+总力", "龙虾", "浮动", "未抵消"];
+
+    // === 图表缩放 ===
+    let chartZoom = 1;
+    const ZOOM_MIN = 0.5;
+    const ZOOM_MAX = 3;
+    const ZOOM_STEP = 1.25;
+
+    // === 未抵消缩放（独立） ===
+    let unmatchedZoom = 1;
+    const UNMATCHED_ZOOM_MIN = 0.5;
+    const UNMATCHED_ZOOM_MAX = 3;
+    const UNMATCHED_ZOOM_STEP = 1.25;
+
+    let panelHidden = false;
+
+    const RECENT_LIMIT = 38;
+    const DETAIL_ROW_H = 22;
+
+    const STORAGE_KEY = "shengri_app_v5";
+
+    const SPECIAL_FORCE_MAP = {
+      5: 2.25, 10: 7, 15: 11.75, 20: 16.5, 25: 21.25,
+      30: 26, 35: 30.75, 40: 35.5, 45: 40.25
+    };
+
+    // ========== 工具函数 ==========
+    function vibrate() {
+      if (navigator.vibrate) {
+        try { navigator.vibrate(30); } catch(e) {}
+      }
+    }
+
+    function fmtNum(n, maxDec = 1) {
+      if (n === 0) return "0";
+      let s = Number(n).toFixed(maxDec);
+      s = s.replace(/\.?0+$/, "");
+      if (s === "-0") s = "0";
+      return s;
+    }
+    function fmtSheng(n) { return (n === 0 ? 0 : n).toFixed(2); }
+
+    function calcSingleForce(x) {
+      if (x > 0) {
+        if (Object.prototype.hasOwnProperty.call(SPECIAL_FORCE_MAP, x)) return SPECIAL_FORCE_MAP[x];
+        return x * 0.95;
+      }
+      return x;
+    }
+
+    function calcSingleDong(x) {
+      if (x > 0) return calcSingleForce(x) - 100;
+      return x + 100;
+    }
+
+    function calcFloat(s, ratio) {
+      const P = s.pingLi;
+      const d = s.sheng - s.ri;
+      const f = s.f;
+
+      const P_up = P + Math.abs(P) * ratio;
+      const P_down = P - Math.abs(P) * ratio;
+
+      let x_up = 0;
+      if (d + 1 !== 0) {
+        x_up = (P_up * Math.abs(d + 1) - f) / 0.95;
+      }
+
+      let x_down = 0;
+      if (d - 1 !== 0) {
+        x_down = -(f - P_down * Math.abs(d - 1));
+      }
+
+      let winP_up = 0, loseP_up = 0;
+      const absUp = Math.abs(x_up);
+      if (absUp !== 0) {
+        if (d + 1 !== 0) winP_up = (f + absUp * 0.95) / Math.abs(d + 1);
+        if (d - 1 !== 0) loseP_up = (f - absUp) / Math.abs(d - 1);
+      }
+
+      let winP_down = 0, loseP_down = 0;
+      const absDown = Math.abs(x_down);
+      if (absDown !== 0) {
+        if (d + 1 !== 0) winP_down = (f + absDown * 0.95) / Math.abs(d + 1);
+        if (d - 1 !== 0) loseP_down = (f - absDown) / Math.abs(d - 1);
+      }
+
+      return { x_up, x_down, winP_up, loseP_up, winP_down, loseP_down };
+    }
+
+    function hasBaseData() {
+      const b = baseState;
+      return b.sheng !== 0 || b.ri !== 0 || b.f !== 0 || b.tf !== 0 || b.fan !== 0 || b.dong !== 0
+        || b.maxZuiLi !== 0 || b.minZuiPa !== 0
+        || b.dangSheng !== 0 || b.dangRi !== 0
+        || b.daSheng !== 0 || b.daRi !== 0
+        || b.maxShengDuo !== 0 || b.maxRiDuo !== 0;
+    }
+
+    function calcState(seq) {
+      if (seq.length === 0 && baseState._freeze) {
+        return {
+          ma: baseState.ma || 0,
+          longxia: baseState.longxia || 0,
+          yingSheng: baseState.yingSheng || 0,
+          f: baseState.f || 0,
+          pingLi: baseState.pingLi || 0,
+          tf: baseState.tf || 0,
+          shengPct: baseState.shengPct || 0,
+          sheng: baseState.sheng || 0,
+          ri: baseState.ri || 0,
+          dangSheng: baseState.dangSheng || 0,
+          dangRi: baseState.dangRi || 0,
+          daSheng: baseState.daSheng || 0,
+          daRi: baseState.daRi || 0,
+          maxShengDuo: baseState.maxShengDuo || 0,
+          maxRiDuo: baseState.maxRiDuo || 0,
+          maxZuiLi: baseState.maxZuiLi || 0,
+          minZuiPa: baseState.minZuiPa || 0,
+          fan: baseState.fan || 0,
+          dong: baseState.dong || 0,
+          maPing: baseState.maPing || 0,
+          zhongLi: baseState.zhongLi || 0,
+          zhongPingLi: baseState.zhongPingLi || 0
+        };
+      }
+
+      let sheng = baseState.sheng || 0;
+      let ri = baseState.ri || 0;
+      let dangSheng = baseState.dangSheng || 0;
+      let dangRi = baseState.dangRi || 0;
+      let daSheng = baseState.daSheng || 0;
+      let daRi = baseState.daRi || 0;
+      let maxShengDuo = baseState.maxShengDuo || 0;
+      let maxRiDuo = baseState.maxRiDuo || 0;
+      let f = baseState.f || 0;
+      let tf = baseState.tf || 0;
+      let fan = baseState.fan || 0;
+      let dong = baseState.dong || 0;
+      let lastSign = baseState.lastSign || 0;
+
+      const baseHas = baseState._freeze || hasBaseData();
+      let maxZuiLi = baseHas ? (baseState.maxZuiLi || 0) : -Infinity;
+      let minZuiPa = baseHas ? (baseState.minZuiPa || 0) : Infinity;
+
+      for (let x of seq) {
+        if (x > 0) {
+          sheng++;
+          if (lastSign === 1) dangSheng++; else dangSheng = 1;
+          dangRi = 0;
+          lastSign = 1;
+        } else {
+          ri++;
+          if (lastSign === -1) dangRi++; else dangRi = 1;
+          dangSheng = 0;
+          lastSign = -1;
+        }
+        f += calcSingleForce(x);
+        fan += Math.abs(x);
+        dong += calcSingleDong(x);
+
+        if (dangSheng > daSheng) daSheng = dangSheng;
+        if (dangRi > daRi) daRi = dangRi;
+
+        const diff = sheng - ri;
+        if (diff > maxShengDuo) maxShengDuo = diff;
+        if (-diff > maxRiDuo) maxRiDuo = -diff;
+
+        if (diff === 0) { tf += f; f = 0; }
+
+        const sumFT = f + tf;
+        if (sumFT > maxZuiLi) maxZuiLi = sumFT;
+        if (sumFT < minZuiPa) minZuiPa = sumFT;
+      }
+
+      const ma = sheng + ri;
+      const longxia = sheng - ri;
+      const shengPct = ma === 0 ? 0 : (sheng / ma) * 100;
+      const yingSheng = ma * 0.0136;
+      const pingLi = longxia === 0 ? 0 : f / Math.abs(longxia);
+      const maPing = ma === 0 ? 0 : (f + tf) / ma;
+      const zhongLi = f + tf;
+      const zhongPingLi = longxia === 0 ? 0 : zhongLi / Math.abs(longxia);
+
+      return {
+        ma, longxia, yingSheng, f, pingLi, tf, shengPct, sheng, ri,
+        dangSheng, dangRi, daSheng, daRi, maxShengDuo, maxRiDuo,
+        maxZuiLi: (maxZuiLi === -Infinity || maxZuiLi === Infinity) ? 0 : maxZuiLi,
+        minZuiPa: (minZuiPa === -Infinity || minZuiPa === Infinity) ? 0 : minZuiPa,
+        fan, dong, maPing, zhongLi, zhongPingLi
+      };
+    }
+
+    function formatOutput(s, strength, posCount, negCount) {
+      const longxiaStr = s.longxia > 0 ? `+${s.longxia}` : String(s.longxia);
+      const shengDuoStr = s.maxShengDuo > 0 ? `+${s.maxShengDuo}` : `+0`;
+      const riDuoStr = s.maxRiDuo > 0 ? `-${s.maxRiDuo}` : `-0`;
+      const dangRiStr = s.dangRi > 0 ? `-${s.dangRi}` : `-0`;
+      const daRiStr = s.daRi > 0 ? `-${s.daRi}` : `-0`;
+
+      // 10% 浮动
+      const f10 = calcFloat(s, 0.10);
+      const up10 = `${fmtNum(f10.x_up, 2)}(${fmtNum(f10.winP_up, 1)}/${fmtNum(f10.loseP_up, 1)})`;
+      const down10 = `${fmtNum(f10.x_down, 2)}(${fmtNum(f10.winP_down, 1)}/${fmtNum(f10.loseP_down, 1)})`;
+      const float10Str = `${up10},${down10}`;
+
+      return `马：${s.ma} 马平：${fmtNum(s.maPing, 2)} 浮虾：+${posCount}/-${negCount}
+饭：${fmtNum(s.fan, 2)} 洞：${fmtNum(s.dong, 2)}
+龙虾：${longxiaStr} 应生：${fmtNum(s.yingSheng, 1)} 圣：${fmtSheng(s.shengPct)}
+力：${fmtNum(s.f, 2)} 平力：${fmtNum(s.pingLi, 1)}
+总力：${fmtNum(s.tf, 2)} 实力：${fmtNum(strength || 0, 2)}
+终力：${fmtNum(s.zhongLi, 1)} 终平力：${fmtNum(s.zhongPingLi, 2)}
+10%：${float10Str}
+最力：${fmtNum(s.maxZuiLi, 2)} 最趴：${fmtNum(s.minZuiPa, 2)}
+大生：${s.daSheng} 大日：${daRiStr} 当生：${s.dangSheng} 当日：${dangRiStr}
+生：${s.sheng} 日：-${s.ri}
+生多：${shengDuoStr} 日多：${riDuoStr}`;
+    }
+
+    function colorizeNumbers(text) {
+      return text.replace(/(-?\d+(?:\.\d+)?)/g, (m, ns) => {
+        const n = parseFloat(ns);
+        if (ns.charAt(0) === '-' || n < 0) return `<span class="num-neg">${ns}</span>`;
+        return `<span class="num-zero">${ns}</span>`;
+      });
+    }
+
+    function renderText(text) {
+      text = text.replace(/浮虾：\+(\d+)\/-(\d+)/g, '浮虾：<span class="num-pos">+$1</span>/<span class="num-neg">-$2</span>');
+
+      let result = text.replace(/^(10%：.*)$/m, (m, line) => {
+        const idx = line.indexOf('：');
+        const prefix = line.slice(0, idx + 1);
+        const content = line.slice(idx + 1);
+        return prefix + colorizeNumbers(content);
+      });
+
+      return result.replace(/([^\s：]+)：([+\-]?\d+(?:\.\d+)?)/g, (m, label, val) => {
+        const num = parseFloat(val);
+        let cls = "num-zero";
+        if (label === "马" || label === "饭") cls = "num-zero";
+        else if (label === "圣" && num > 0 && num < 45) cls = "num-neg";
+        else if (num > 0) cls = "num-pos";
+        else if (num < 0) cls = "num-neg";
+        if (label === "龙虾" || label === "平力") cls += " num-big";
+        return `${label}：<span class="${cls}">${val}</span>`;
+      });
+    }
+
+    function injectPreview(html) {
+      if (!previewData) return html;
+      const previewLine =
+        `<span class="preview-pingli">预平力：` +
+        `<span class="preview-win">${previewData.win}</span>` +
+        `/` +
+        `<span class="preview-lose">${previewData.lose}</span>` +
+        `</span>`;
+      const zhongLine =
+        `<span class="preview-pingli">终预平力：` +
+        `<span class="preview-win">${previewData.zhongWin}</span>` +
+        `/` +
+        `<span class="preview-lose">${previewData.zhongLose}</span>` +
+        `</span>`;
+      return html.replace(
+        /(平力：<span[^>]*>[^<]*<\/span>)\n/,
+        `$1\n${previewLine}\n${zhongLine}\n`
+      );
+    }
+
+    // ========== 计算未抵消数据及实力 ==========
+    function calcUnmatched(seq) {
+      const unmatched = [];
+      let strength = 0;
+
+      for (let x of seq) {
+        let rem = calcSingleForce(x);
+        
+        while (rem !== 0) {
+          // 找绝对值最接近的异号
+          let idx = -1;
+          let minDiff = Infinity;
+          for (let i = 0; i < unmatched.length; i++) {
+            let item = unmatched[i];
+            if (item.force * rem < 0) {
+              let diff = Math.abs(Math.abs(item.force) - Math.abs(rem));
+              if (diff < minDiff) {
+                minDiff = diff;
+                idx = i;
+              }
+            }
+          }
+
+          if (idx === -1) break; // 没有异号了
+
+          let item = unmatched[idx];
+          
+          // 判断是否满足抵消条件：绝对值大的吃掉绝对值小的
+          let remIsPos = rem > 0;
+          let itemIsPos = item.force > 0;
+          let canOffset = false;
+
+          if (remIsPos && !itemIsPos) {
+            if (rem > Math.abs(item.force)) canOffset = true;
+          } else if (!remIsPos && itemIsPos) {
+            if (item.force > Math.abs(rem)) canOffset = true;
+          }
+
+          if (canOffset) {
+            // 计算实力差值
+            let posForce = remIsPos ? rem : item.force;
+            let negForce = remIsPos ? Math.abs(item.force) : Math.abs(rem);
+            strength += (posForce - negForce);
+
+            // 直接抵消：将配对的负数（或正数）从池子里移除，当前残余力清零
+            unmatched.splice(idx, 1);
+            rem = 0; 
+          } else {
+            // 如果正数不够大，无法吃掉负数，跳出
+            break; 
+          }
+        }
+        
+        if (rem !== 0) {
+          unmatched.push({ force: rem, orig: x });
+        }
+      }
+      
+      let posCount = unmatched.filter(x => x.orig > 0).length;
+      let negCount = unmatched.filter(x => x.orig < 0).length;
+      
+      return { unmatched, strength, posCount, negCount };
+    }
+
+    function updateUnmatchedArea(unmatched) {
+      const el = document.getElementById("unmatchedList");
+      if (!el) return;
+      if (!unmatched || unmatched.length === 0) {
+        el.innerHTML = '<span class="unmatched-empty">全部抵消完成</span>';
+      } else {
+        el.innerHTML = unmatched.map(item => {
+          const cls = item.orig > 0 ? "num-pos" : "num-neg";
+          return `<span class="${cls}">${fmtNum(item.orig)}</span>`;
+        }).join("");
+      }
+    }
+
+    // ========== 渲染 ==========
+    function renderRecent() {
+      const el = document.getElementById("recentList");
+      if (inputs.length === 0) {
+        el.innerHTML = '<span class="empty">暂无记录</span>';
+        return;
+      }
+      const recent = inputs.slice(-RECENT_LIMIT);
+      el.innerHTML = recent.map(x => x > 0 ? '<span class="win">1</span>' : '<span class="lose">2</span>').join("");
+    }
+
+    let detailLock = false;
+
+    function renderDetailRows() {
+      const el = document.getElementById("recentDetail");
+      if (!el) return;
+
+      const total = inputs.length;
+      if (total === 0) {
+        el.innerHTML = '<div class="detail-empty">暂无记录</div>';
+        return;
+      }
+
+      const viewH = el.clientHeight || 220;
+      const st = el.scrollTop;
+      let start = Math.floor(st / DETAIL_ROW_H) - 2;
+      if (start < 0) start = 0;
+      let end = Math.ceil((st + viewH) / DETAIL_ROW_H) + 2;
+      if (end > total) end = total;
+
+      let html = "";
+      if (start > 0) {
+        html += `<div style="height:${start * DETAIL_ROW_H}px"></div>`;
+      }
+      for (let i = start; i < end; i++) {
+        const idx = total - 1 - i;
+        const x = inputs[idx];
+        const f = calcSingleForce(x);
+        const sign = x > 0 ? "+" : "-";
+        const cls = x > 0 ? "pos" : "neg";
+        
+        // 检查是否该行需要加黄色分割线
+        const isZeroLx = (lxHistory.length > idx && lxHistory[idx] === 0);
+        const rowCls = isZeroLx ? "detail-row zero-lx-line" : "detail-row";
+
+        html += `<div class="${rowCls}">
+          <span class="d-in ${cls}">${fmtNum(x)}</span>
+          <span class="d-f ${cls}">${fmtNum(f, 2)}</span>
+          <span class="d-sign ${cls}">${sign}</span>
+        </div>`;
+      }
+      if (end < total) {
+        html += `<div style="height:${(total - end) * DETAIL_ROW_H}px"></div>`;
+      }
+
+      detailLock = true;
+      el.innerHTML = html;
+      if (el.scrollTop !== st) el.scrollTop = st;
+      detailLock = false;
+    }
+
+    function renderRecentDetail() {
+      const el = document.getElementById("recentDetail");
+      if (!el) return;
+      el.scrollTop = 0;
+      renderDetailRows();
+    }
+
+    function renderOutput(text, checkHtml = "") {
+      document.getElementById("output").innerHTML = injectPreview(renderText(text));
+      document.getElementById("checkArea").innerHTML = checkHtml;
+      
+      // 计算龙虾历史
+      lxHistory = [];
+      let curLx = baseState.sheng - baseState.ri;
+      for (let x of inputs) {
+        if (x > 0) curLx++; else curLx--;
+        lxHistory.push(curLx);
+      }
+
+      renderRecent();
+      renderRecentDetail();
+      renderChart();
+      updateFloatArea(calcState(inputs));
+      
+      const { unmatched } = calcUnmatched(inputs);
+      updateUnmatchedArea(unmatched);
+    }
+
+    function refreshOutputOnly() {
+      const st = calcState(inputs);
+      const { strength, posCount, negCount } = calcUnmatched(inputs);
+      const text = formatOutput(st, strength, posCount, negCount);
+      document.getElementById("output").innerHTML = injectPreview(renderText(text));
+      renderChart();
+      updateFloatArea(st);
+      updateUnmatchedArea(calcUnmatched(inputs).unmatched);
+    }
+
+    function save() {
+      const data = {
+        inputs,
+        outputHistory,
+        baseState,
+        chartZoom,
+        unmatchedZoom,
+        version: 5,
+        savedAt: new Date().toISOString()
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+    }
+
+    function load() {
+      try {
+        let raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) raw = localStorage.getItem("shengri_app_v4");
+        if (!raw) raw = localStorage.getItem("shengri_app_v3");
+        if (!raw) raw = localStorage.getItem("shengri_app_v2");
+        if (!raw) raw = localStorage.getItem("shengri_app_v1");
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data && Array.isArray(data.inputs)) {
+          inputs = data.inputs;
+          outputHistory = data.outputHistory || [];
+          if (typeof data.chartZoom === "number" && isFinite(data.chartZoom)) {
+            chartZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, data.chartZoom));
+          }
+          if (typeof data.unmatchedZoom === "number" && isFinite(data.unmatchedZoom)) {
+            unmatchedZoom = Math.max(UNMATCHED_ZOOM_MIN, Math.min(UNMATCHED_ZOOM_MAX, data.unmatchedZoom));
+          }
+          if (data.baseState && typeof data.baseState === "object") {
+            baseState = Object.assign({
+              sheng: 0, ri: 0, dangSheng: 0, dangRi: 0,
+              daSheng: 0, daRi: 0, maxShengDuo: 0, maxRiDuo: 0,
+              f: 0, tf: 0, fan: 0, dong: 0, lastSign: 0,
+              maxZuiLi: 0, minZuiPa: 0, _freeze: false,
+              ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+              shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0
+            }, data.baseState);
+          }
+          rebuild();
+        }
+      } catch (e) {}
+    }
+
+    function rebuild() {
+      outputHistory = [];
+      for (let i = 0; i < inputs.length; i++) {
+        const partial = inputs.slice(0, i + 1);
+        const st = calcState(partial);
+        const { strength, posCount, negCount } = calcUnmatched(partial);
+        outputHistory.push(formatOutput(st, strength, posCount, negCount));
+      }
+      const st = calcState(inputs);
+      const { strength, posCount, negCount } = calcUnmatched(inputs);
+      renderOutput(formatOutput(st, strength, posCount, negCount));
+      save();
+    }
+
+    // 普通 Toast
+    function toast(msg, isWarn = false) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.remove("bubble"); 
+      el.classList.add("show");
+      if (isWarn) {
+        el.style.color = "#eab308";
+        el.style.fontSize = "12px";
+      } else {
+        el.style.color = "#fff";
+        el.style.fontSize = "14px";
+      }
+      
+      if (el.timer) clearTimeout(el.timer);
+      el.timer = setTimeout(() => {
+        el.classList.remove("show");
+      }, 1800);
+    }
+
+    // 气泡 Toast
+    function bubbleToast(html, duration) {
+      const el = document.getElementById("toast");
+      el.innerHTML = html;
+      el.style.color = ""; 
+      el.style.fontSize = "";
+      el.classList.add("show", "bubble");
+      
+      if (el.timer) clearTimeout(el.timer);
+      el.timer = setTimeout(() => {
+        el.classList.remove("show", "bubble");
+      }, duration);
+    }
+
+    // ========== 浮动区 ==========
+    function updateFloatArea(s) {
+      const el = document.getElementById("floatArea");
+      if (!el) return;
+      const ratios = [0.05, 0.15, 0.20, 0.50];
+      let html = "";
+      for (const r of ratios) {
+        const flt = calcFloat(s, r);
+        const pct = Math.round(r * 100) + "%";
+        const upStr = `${fmtNum(flt.x_up, 2)}(${fmtNum(flt.winP_up, 1)}/${fmtNum(flt.loseP_up, 1)})`;
+        const downStr = `${fmtNum(flt.x_down, 2)}(${fmtNum(flt.winP_down, 1)}/${fmtNum(flt.loseP_down, 1)})`;
+        const line = `${pct}：${upStr},${downStr}`;
+        html += `<div class="float-row">${colorizeNumbers(line)}</div>`;
+      }
+      el.innerHTML = html;
+    }
+
+    // ========== 曲线数据及绘制 ==========
+    function computeSumFTSeries() {
+      const series = [];
+      const baseHas = baseState._freeze || hasBaseData();
+      let sheng = baseState.sheng || 0;
+      let ri = baseState.ri || 0;
+      let f = baseState.f || 0;
+      let tf = baseState.tf || 0;
+
+      if (baseHas) series.push(f + tf);
+
+      for (let x of inputs) {
+        if (x > 0) sheng++; else ri++;
+        f += calcSingleForce(x);
+        if (sheng - ri === 0) { tf += f; f = 0; }
+        series.push(f + tf);
+      }
+      return series;
+    }
+
+    function computeLongxiaSeries() {
+      const series = [];
+      const baseHas = baseState._freeze || hasBaseData();
+      let sheng = baseState.sheng || 0;
+      let ri = baseState.ri || 0;
+
+      if (baseHas) series.push(sheng - ri);
+
+      for (let x of inputs) {
+        if (x > 0) sheng++; else ri++;
+        series.push(sheng - ri);
+      }
+      return series;
+    }
+
+    function buildPoints(series, plotW, xOf, yOf) {
+      const n = series.length;
+      const pts = [];
+      const maxPts = Math.max(4, Math.floor(plotW));
+      if (n <= maxPts) {
+        for (let i = 0; i < n; i++) {
+          pts.push({ x: xOf(i), y: yOf(series[i]), v: series[i] });
+        }
+      } else {
+        const buckets = Math.max(2, Math.floor(maxPts / 2));
+        const size = n / buckets;
+        for (let b = 0; b < buckets; b++) {
+          const start = Math.floor(b * size);
+          const end = Math.min(n, Math.floor((b + 1) * size));
+          if (start >= end) continue;
+          let mn = Infinity, mx = -Infinity, mnI = start, mxI = start;
+          for (let i = start; i < end; i++) {
+            const v = series[i];
+            if (v < mn) { mn = v; mnI = i; }
+            if (v > mx) { mx = v; mxI = i; }
+          }
+          if (mnI <= mxI) {
+            pts.push({ x: xOf(mnI), y: yOf(mn), v: mn });
+            pts.push({ x: xOf(mxI), y: yOf(mx), v: mx });
+          } else {
+            pts.push({ x: xOf(mxI), y: yOf(mx), v: mx });
+            pts.push({ x: xOf(mnI), y: yOf(mn), v: mn });
+          }
+        }
+      }
+      return pts;
+    }
+
+    function drawDot(ctx, x, y, color) {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x, y, 2.8, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.65)";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x, y, 4.6, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    function roundRectPath(ctx, x, y, w, h, r) {
+      if (w < 2 * r) r = w / 2;
+      if (h < 2 * r) r = h / 2;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    // ===== 线段 / 矩形 / 圆 几何相交检测（用于严格避让） =====
+
+    // 两线段是否相交（含端点相切）
+    function segmentsIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+      const d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
+      if (Math.abs(d) < 1e-12) return false;
+      const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d;
+      const u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d;
+      return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+    }
+
+    // 线段与矩形是否相交
+    function segIntersectsRect(x1, y1, x2, y2, rx1, ry1, rx2, ry2) {
+      const rxmin = Math.min(rx1, rx2);
+      const rxmax = Math.max(rx1, rx2);
+      const rymin = Math.min(ry1, ry2);
+      const rymax = Math.max(ry1, ry2);
+
+      // 快速排除：线段两端都在矩形外同一侧
+      if (x1 < rxmin && x2 < rxmin) return false;
+      if (x1 > rxmax && x2 > rxmax) return false;
+      if (y1 < rymin && y2 < rymin) return false;
+      if (y1 > rymax && y2 > rymax) return false;
+
+      // 任一端点在矩形内部
+      if (x1 >= rxmin && x1 <= rxmax && y1 >= rymin && y1 <= rymax) return true;
+      if (x2 >= rxmin && x2 <= rxmax && y2 >= rymin && y2 <= rymax) return true;
+
+      // 线段与矩形四条边相交
+      return (
+        segmentsIntersect(x1, y1, x2, y2, rxmin, rymin, rxmax, rymin) ||
+        segmentsIntersect(x1, y1, x2, y2, rxmin, rymax, rxmax, rymax) ||
+        segmentsIntersect(x1, y1, x2, y2, rxmin, rymin, rxmin, rymax) ||
+        segmentsIntersect(x1, y1, x2, y2, rxmax, rymin, rxmax, rymax)
+      );
+    }
+
+    // 矩形是否与整条曲线（所有线段 + 最后点的圆）相交
+    function rectIntersectsCurve(x1, y1, x2, y2, pts, dotR) {
+      // 检查所有曲线段
+      for (let i = 0; i < pts.length - 1; i++) {
+        if (segIntersectsRect(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, x1, y1, x2, y2)) {
+          return true;
+        }
+      }
+      // 检查最后点的圆（dotR 半径，含描边）
+      if (pts.length > 0) {
+        const last = pts[pts.length - 1];
+        const cx = Math.max(x1, Math.min(last.x, x2));
+        const cy = Math.max(y1, Math.min(last.y, y2));
+        const dx = last.x - cx;
+        const dy = last.y - cy;
+        if (dx * dx + dy * dy < dotR * dotR) return true;
+      }
+      // 只有一个点时也要检查该点
+      if (pts.length === 1) {
+        const p = pts[0];
+        const cx = Math.max(x1, Math.min(p.x, x2));
+        const cy = Math.max(y1, Math.min(p.y, y2));
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        if (dx * dx + dy * dy < dotR * dotR) return true;
+      }
+      return false;
+    }
+
+    // ===== 安全标签绘制：严格避免与曲线重叠 =====
+    function drawLabelSafely(ctx, anchorX, anchorY, text, color, cssW, cssH, pts, dotR) {
+      ctx.font = "bold 11px 'SF Mono', Menlo, Consolas, monospace";
+      const tw = ctx.measureText(text).width;
+      const th = 12;
+      const bgPadX = 3;
+      const bgPadY = 2;
+      const margin = 1;
+      const hGap = 8;
+
+      // 生成候选位置（文字左上角坐标）
+      const vOffsets = [-10, 10, -20, 20, -32, 32, -45, 45, -58, 58];
+      const candidates = [];
+
+      // 右侧
+      for (const vo of vOffsets) {
+        candidates.push({ left: anchorX + hGap, top: anchorY + vo - th / 2 });
+      }
+      // 左侧
+      for (const vo of vOffsets) {
+        candidates.push({ left: anchorX - hGap - tw, top: anchorY + vo - th / 2 });
+      }
+      // 正上方
+      for (const vo of [-16, -26, -38, -52, -66]) {
+        candidates.push({ left: anchorX - tw / 2, top: anchorY + vo - th / 2 });
+      }
+      // 正下方
+      for (const vo of [16, 26, 38, 52, 66]) {
+        candidates.push({ left: anchorX - tw / 2, top: anchorY + vo - th / 2 });
+      }
+
+      let best = null;
+      for (const c of candidates) {
+        const bx1 = c.left - bgPadX;
+        const by1 = c.top - bgPadY;
+        const bx2 = c.left + tw + bgPadX;
+        const by2 = c.top + th + bgPadY;
+
+        // 越界检查
+        if (bx1 < margin || bx2 > cssW - margin) continue;
+        if (by1 < margin || by2 > cssH - margin) continue;
+
+        // 严格碰撞检测：不能与曲线任何部分（线段/端点/最后点圆）相交
+        if (!rectIntersectsCurve(bx1, by1, bx2, by2, pts, dotR)) {
+          best = c;
+          break;
+        }
+      }
+
+      // 所有候选都与曲线冲突 → 不绘制标签，确保绝不遮挡曲线
+      if (!best) return;
+
+      // 绘制不透明背景（此时背景不会覆盖曲线，因为已经严格检测无重叠）
+      const bx = best.left - bgPadX;
+      const by = best.top - bgPadY;
+      const bw = tw + bgPadX * 2;
+      const bh = th + bgPadY * 2;
+      roundRectPath(ctx, bx, by, bw, bh, 3);
+      ctx.fillStyle = "rgba(26,26,26,0.96)";
+      ctx.fill();
+
+      // 绘制文字
+      ctx.fillStyle = color;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(text, best.left, best.top);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+    }
+
+    function drawOneChart(canvas, series) {
+      if (!canvas) return;
+      const cssW = canvas.clientWidth;
+      const cssH = canvas.clientHeight;
+      if (cssW <= 0 || cssH <= 0) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const needW = Math.round(cssW * dpr);
+      const needH = Math.round(cssH * dpr);
+      if (canvas.width !== needW || canvas.height !== needH) {
+        canvas.width = needW; canvas.height = needH;
+      }
+
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cssW, cssH);
+
+      const n = series.length;
+
+      let minV = 0, maxV = 0;
+      for (let i = 0; i < n; i++) {
+        const v = series[i];
+        if (v < minV) minV = v;
+        if (v > maxV) maxV = v;
+      }
+      if (minV === maxV) { minV -= 1; maxV += 1; }
+      const pad = (maxV - minV) * 0.14;
+      minV -= pad; maxV += pad;
+
+      const padL = 4, padR = 4, padT = 8, padB = 8;
+      const plotW = cssW - padL - padR;
+      const plotH = cssH - padT - padB;
+      const xOf = i => n <= 1 ? padL + plotW / 2 : padL + (i / (n - 1)) * plotW;
+      const yOf = v => padT + (1 - (v - minV) / (maxV - minV)) * plotH;
+
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.lineWidth = 1;
+      const y0 = yOf(0);
+      ctx.beginPath();
+      ctx.moveTo(padL, y0);
+      ctx.lineTo(padL + plotW, y0);
+      ctx.stroke();
+
+      if (n === 0) return;
+
+      const pts = buildPoints(series, plotW, xOf, yOf);
+
+      ctx.lineWidth = 1.6;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const mid = (a.v + b.v) / 2;
+        ctx.strokeStyle = mid >= 0 ? "#ef4444" : "#22c55e";
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+
+      if (pts.length === 1) {
+        const p = pts[0];
+        ctx.fillStyle = p.v >= 0 ? "#ef4444" : "#22c55e";
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+
+      const lastV = series[n - 1];
+      const lastP = pts[pts.length - 1];
+      if (lastP) {
+        const c = lastV >= 0 ? "#ef4444" : "#22c55e";
+        drawDot(ctx, lastP.x, lastP.y, c);
+        // 严格避让标签；dotR = 5.5 含圆外圈描边
+        drawLabelSafely(ctx, lastP.x, lastP.y, fmtNum(lastV, 2), c, cssW, cssH, pts, 5.5);
+      }
+    }
+
+    function drawAllCharts() {
+      if (chartMode === 0 || chartMode === 4 || chartMode === 5) return;
+
+      const canvasA = document.getElementById("chartA");
+      const canvasB = document.getElementById("chartB");
+      if (!canvasA || !canvasB) return;
+
+      if (chartMode === 1) {
+        drawOneChart(canvasA, computeSumFTSeries());
+        drawOneChart(canvasB, computeLongxiaSeries());
+      } else if (chartMode === 2) {
+        drawOneChart(canvasA, computeSumFTSeries());
+      } else if (chartMode === 3) {
+        drawOneChart(canvasB, computeLongxiaSeries());
+      }
+    }
+
+    let chartRaf = null;
+    function renderChart() {
+      if (chartRaf) return;
+      chartRaf = requestAnimationFrame(() => {
+        chartRaf = null;
+        drawAllCharts();
+      });
+    }
+
+    // ========== 图表缩放 ==========
+    function updateZoomUI() {
+      const label = document.getElementById("zoomLabelBtn");
+      if (label) label.textContent = Math.round(chartZoom * 100) + "%";
+      const inBtn = document.getElementById("zoomInBtn");
+      const outBtn = document.getElementById("zoomOutBtn");
+      if (inBtn) inBtn.disabled = chartZoom >= ZOOM_MAX - 1e-6;
+      if (outBtn) outBtn.disabled = chartZoom <= ZOOM_MIN + 1e-6;
+    }
+
+    function setChartZoom(z) {
+      chartZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+      document.documentElement.style.setProperty("--chart-zoom", String(chartZoom));
+      updateZoomUI();
+      renderChart();
+      save();
+    }
+
+    // ========== 未抵消缩放 ==========
+    function updateUnmatchedZoomUI() {
+      const label = document.getElementById("unmatchedZoomLabelBtn");
+      if (label) label.textContent = Math.round(unmatchedZoom * 100) + "%";
+      const inBtn = document.getElementById("unmatchedZoomInBtn");
+      const outBtn = document.getElementById("unmatchedZoomOutBtn");
+      if (inBtn) inBtn.disabled = unmatchedZoom >= UNMATCHED_ZOOM_MAX - 1e-6;
+      if (outBtn) outBtn.disabled = unmatchedZoom <= UNMATCHED_ZOOM_MIN + 1e-6;
+    }
+
+    function setUnmatchedZoom(z) {
+      unmatchedZoom = Math.max(UNMATCHED_ZOOM_MIN, Math.min(UNMATCHED_ZOOM_MAX, z));
+      document.documentElement.style.setProperty("--unmatched-zoom", String(unmatchedZoom));
+      updateUnmatchedZoomUI();
+      save();
+    }
+
+    // ========== 图表模式切换 ==========
+    function updateChartModeUI() {
+      const btn = document.getElementById("chartBtn");
+      if (btn) btn.textContent = CHART_MODE_LABELS[chartMode];
+    }
+
+    function applyChartMode() {
+      const area = document.getElementById("chartArea");
+      const floatArea = document.getElementById("floatArea");
+      const unmatchedArea = document.getElementById("unmatchedArea");
+      const itemA = document.getElementById("chartItemA");
+      const itemB = document.getElementById("chartItemB");
+      
+      updateChartModeUI();
+
+      area.classList.add("hidden");
+      floatArea.classList.add("hidden");
+      unmatchedArea.classList.add("hidden");
+
+      if (chartMode === 1 || chartMode === 2 || chartMode === 3) {
+        area.classList.remove("hidden");
+        if (chartMode === 1) {
+          area.classList.remove("mode-single");
+          itemA.style.display = "";
+          itemB.style.display = "";
+        } else if (chartMode === 2) {
+          area.classList.add("mode-single");
+          itemA.style.display = "";
+          itemB.style.display = "none";
+        } else if (chartMode === 3) {
+          area.classList.add("mode-single");
+          itemA.style.display = "none";
+          itemB.style.display = "";
+        }
+      } else if (chartMode === 4) {
+        floatArea.classList.remove("hidden");
+      } else if (chartMode === 5) {
+        unmatchedArea.classList.remove("hidden");
+      }
+
+      renderChart();
+    }
+
+    function toggleChartMode() {
+      chartMode = (chartMode + 1) % 6;
+      applyChartMode();
+    }
+
+    // ========== 面板切换 ==========
+    function togglePanel() {
+      panelHidden = !panelHidden;
+      const grid = document.getElementById("toolbarGrid");
+      const btn = document.getElementById("panelBtn");
+      grid.classList.toggle("panel-hidden", panelHidden);
+      btn.classList.toggle("active", panelHidden);
+    }
+
+    // ========== 预平力 + 终预平力 ==========
+    function updatePreview() {
+      const raw = numInput.value.trim();
+      if (!raw || raw === "5" || raw === "6") {
+        if (previewData) { previewData = null; refreshOutputOnly(); }
+        return;
+      }
+      const x = parseFloat(raw);
+      if (isNaN(x) || x === 0) {
+        if (previewData) { previewData = null; refreshOutputOnly(); }
+        return;
+      }
+      const a = Math.abs(x);
+      const winState = calcState(inputs.concat([a]));
+      const loseState = calcState(inputs.concat([-a]));
+      previewData = {
+        win: fmtNum(winState.pingLi, 2),
+        lose: fmtNum(loseState.pingLi, 2),
+        zhongWin: fmtNum(winState.zhongPingLi, 2),
+        zhongLose: fmtNum(loseState.zhongPingLi, 2)
+      };
+      refreshOutputOnly();
+    }
+
+    function clearPreview() { previewData = null; }
+
+    // ========== 编辑状态 ==========
+    function openStateEditModal() {
+      const st = calcState(inputs);
+
+      const fields = [
+        { key: 'ma',        label: '马',    val: st.ma,         dec: 0 },
+        { key: 'maPing',    label: '马平',  val: st.maPing,     dec: 2 },
+        { key: 'fan',       label: '饭',    val: st.fan,        dec: 2 },
+        { key: 'dong',      label: '洞',    val: st.dong,       dec: 2 },
+        { key: 'sheng',     label: '生',    val: st.sheng,      dec: 0 },
+        { key: 'ri',        label: '日',    val: st.ri,         dec: 0 },
+        { key: 'longxia',   label: '龙虾',  val: st.longxia,    dec: 0 },
+        { key: 'yingSheng', label: '应生',  val: st.yingSheng,  dec: 4 },
+        { key: 'f',         label: '力',    val: st.f,          dec: 2 },
+        { key: 'pingLi',    label: '平力',  val: st.pingLi,     dec: 2 },
+        { key: 'tf',        label: '总力',  val: st.tf,         dec: 2 },
+        { key: 'shengPct',  label: '圣',    val: st.shengPct,   dec: 2 },
+        { key: 'zhongLi',   label: '终力',  val: st.zhongLi,    dec: 2 },
+        { key: 'zhongPingLi', label: '终平力', val: st.zhongPingLi, dec: 2 },
+        { key: 'maxZuiLi',  label: '最力',  val: st.maxZuiLi,   dec: 2 },
+        { key: 'minZuiPa',  label: '最趴',  val: st.minZuiPa,   dec: 2 },
+        { key: 'maxShengDuo', label: '生多', val: st.maxShengDuo, dec: 0 },
+        { key: 'maxRiDuo',  label: '日多',  val: st.maxRiDuo,   dec: 0 },
+        { key: 'daSheng',   label: '大生',  val: st.daSheng,    dec: 0 },
+        { key: 'daRi',      label: '大日',  val: st.daRi,       dec: 0 },
+        { key: 'dangSheng', label: '当生',  val: st.dangSheng,  dec: 0 },
+        { key: 'dangRi',    label: '当日',  val: st.dangRi,     dec: 0 }
+      ];
+
+      const grid = document.getElementById("stateEditGrid");
+      grid.innerHTML = fields.map(f => `
+        <div class="state-edit-item">
+          <label>${f.label}</label>
+          <input type="text" inputmode="decimal" data-key="${f.key}" data-dec="${f.dec}"
+            value="${fmtNum(f.val, f.dec)}" />
+        </div>
+      `).join("");
+
+      document.getElementById("stateEditModal").classList.add("show");
+    }
+
+    function closeStateEditModal() {
+      document.getElementById("stateEditModal").classList.remove("show");
+    }
+
+    function saveStateEdit() {
+      const inputsEls = document.querySelectorAll("#stateEditGrid input[data-key]");
+      const edited = {};
+      for (const inp of inputsEls) {
+        const key = inp.dataset.key;
+        const raw = inp.value.trim();
+        const num = parseFloat(raw);
+        if (isNaN(num)) {
+          toast(`「${key}」不是有效数字`);
+          return;
+        }
+        edited[key] = num;
+      }
+
+      const orig = calcState(inputs);
+
+      const newBase = {
+        sheng: orig.sheng, ri: orig.ri,
+        dangSheng: orig.dangSheng, dangRi: orig.dangRi,
+        daSheng: orig.daSheng, daRi: orig.daRi,
+        maxShengDuo: orig.maxShengDuo, maxRiDuo: orig.maxRiDuo,
+        f: orig.f, tf: orig.tf, fan: orig.fan, dong: orig.dong,
+        lastSign: baseState.lastSign || 0,
+        maxZuiLi: orig.maxZuiLi, minZuiPa: orig.minZuiPa,
+        _freeze: false,
+        ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+        shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0
+      };
+      if (orig.sheng > 0 && orig.dangSheng > 0) newBase.lastSign = 1;
+      else if (orig.ri > 0 && orig.dangRi > 0) newBase.lastSign = -1;
+
+      const eps = 1e-9;
+      const changed = {};
+      const origMap = {
+        ma: orig.ma, maPing: orig.maPing, fan: orig.fan, dong: orig.dong,
+        sheng: orig.sheng, ri: orig.ri,
+        longxia: orig.longxia, yingSheng: orig.yingSheng,
+        f: orig.f, pingLi: orig.pingLi, tf: orig.tf,
+        shengPct: orig.shengPct, zhongLi: orig.zhongLi, zhongPingLi: orig.zhongPingLi,
+        maxZuiLi: orig.maxZuiLi, minZuiPa: orig.minZuiPa,
+        maxShengDuo: orig.maxShengDuo, maxRiDuo: orig.maxRiDuo,
+        daSheng: orig.daSheng, daRi: orig.daRi,
+        dangSheng: orig.dangSheng, dangRi: orig.dangRi
+      };
+      for (const k in edited) {
+        if (Math.abs(edited[k] - origMap[k]) > eps) changed[k] = edited[k];
+      }
+
+      if ('sheng' in changed) newBase.sheng = Math.max(0, Math.round(changed.sheng));
+      if ('ri' in changed) newBase.ri = Math.max(0, Math.round(changed.ri));
+      if ('dangSheng' in changed) newBase.dangSheng = Math.max(0, Math.round(changed.dangSheng));
+      if ('dangRi' in changed) newBase.dangRi = Math.max(0, Math.round(changed.dangRi));
+      if ('daSheng' in changed) newBase.daSheng = Math.max(0, Math.round(changed.daSheng));
+      if ('daRi' in changed) newBase.daRi = Math.max(0, Math.round(changed.daRi));
+      if ('maxShengDuo' in changed) newBase.maxShengDuo = Math.max(0, Math.round(changed.maxShengDuo));
+      if ('maxRiDuo' in changed) newBase.maxRiDuo = Math.max(0, Math.round(changed.maxRiDuo));
+      if ('f' in changed) newBase.f = changed.f;
+      if ('tf' in changed) newBase.tf = changed.tf;
+      if ('fan' in changed) newBase.fan = Math.abs(changed.fan);
+      if ('dong' in changed) newBase.dong = changed.dong;
+      if ('maxZuiLi' in changed) newBase.maxZuiLi = changed.maxZuiLi;
+      if ('minZuiPa' in changed) newBase.minZuiPa = changed.minZuiPa;
+
+      const origMa = orig.sheng + orig.ri;
+
+      if ('ma' in changed && !('sheng' in changed) && !('ri' in changed)) {
+        const newMa = Math.max(0, Math.round(changed.ma));
+        if (origMa > 0) {
+          const ratio = newMa / origMa;
+          newBase.sheng = Math.round(orig.sheng * ratio);
+          newBase.ri = newMa - newBase.sheng;
+          if (newBase.ri < 0) { newBase.ri = 0; newBase.sheng = newMa; }
+        } else {
+          newBase.sheng = newMa; newBase.ri = 0;
+        }
+      }
+
+      if ('longxia' in changed && !('sheng' in changed) && !('ri' in changed) && !('ma' in changed)) {
+        const lx = Math.round(changed.longxia);
+        const ma = newBase.sheng + newBase.ri;
+        const ns = (ma + lx) / 2;
+        const nr = (ma - lx) / 2;
+        if (ns >= 0 && nr >= 0) {
+          newBase.sheng = Math.round(ns);
+          newBase.ri = ma - newBase.sheng;
+        }
+      }
+
+      if ('yingSheng' in changed && !('sheng' in changed) && !('ri' in changed)
+        && !('ma' in changed) && !('longxia' in changed)) {
+        const newMa = Math.max(0, Math.round(changed.yingSheng / 0.0136));
+        if (origMa > 0) {
+          const ratio = newMa / origMa;
+          newBase.sheng = Math.round(orig.sheng * ratio);
+          newBase.ri = newMa - newBase.sheng;
+          if (newBase.ri < 0) { newBase.ri = 0; newBase.sheng = newMa; }
+        } else {
+          newBase.sheng = newMa; newBase.ri = 0;
+        }
+      }
+
+      if ('pingLi' in changed) {
+        const lx = Math.abs(newBase.sheng - newBase.ri);
+        if (lx > 0) newBase.f = changed.pingLi * lx;
+      }
+
+      if ('shengPct' in changed && !('sheng' in changed) && !('ri' in changed)
+        && !('ma' in changed) && !('longxia' in changed) && !('yingSheng' in changed)) {
+        const ma = newBase.sheng + newBase.ri;
+        if (ma > 0 && changed.shengPct >= 0 && changed.shengPct <= 100) {
+          newBase.sheng = Math.round(ma * changed.shengPct / 100);
+          newBase.ri = ma - newBase.sheng;
+        }
+      }
+
+      if ('maPing' in changed) {
+        const ma = newBase.sheng + newBase.ri;
+        if (ma > 0) newBase.tf = changed.maPing * ma - newBase.f;
+      }
+
+      if ('zhongLi' in changed && !('maPing' in changed) && !('tf' in changed)) {
+        newBase.tf = changed.zhongLi - newBase.f;
+      }
+
+      if ('zhongPingLi' in changed && !('maPing' in changed) && !('tf' in changed) && !('zhongLi' in changed)) {
+        const lx = Math.abs(newBase.sheng - newBase.ri);
+        if (lx !== 0) {
+          const zhongLi = changed.zhongPingLi * lx;
+          newBase.tf = zhongLi - newBase.f;
+        }
+      }
+
+      if (newBase.dangSheng > 0) newBase.lastSign = 1;
+      else if (newBase.dangRi > 0) newBase.lastSign = -1;
+
+      baseState = newBase;
+      inputs = [];
+      outputHistory = [];
+      redoStack = [];
+      clearPreview();
+      rebuild();
+      closeStateEditModal();
+      toast("已更新状态 · 输入历史已重置为基线");
+    }
+
+    // ========== 自由编辑 ==========
+    function openFreeEditModal() {
+      const st = calcState(inputs);
+
+      const fields = [
+        { key: 'ma',        label: '马',    val: st.ma,         dec: 0 },
+        { key: 'maPing',    label: '马平',  val: st.maPing,     dec: 2 },
+        { key: 'fan',       label: '饭',    val: st.fan,        dec: 2 },
+        { key: 'dong',      label: '洞',    val: st.dong,       dec: 2 },
+        { key: 'sheng',     label: '生',    val: st.sheng,      dec: 0 },
+        { key: 'ri',        label: '日',    val: st.ri,         dec: 0 },
+        { key: 'longxia',   label: '龙虾',  val: st.longxia,    dec: 0 },
+        { key: 'yingSheng', label: '应生',  val: st.yingSheng,  dec: 4 },
+        { key: 'f',         label: '力',    val: st.f,          dec: 2 },
+        { key: 'pingLi',    label: '平力',  val: st.pingLi,     dec: 2 },
+        { key: 'tf',        label: '总力',  val: st.tf,         dec: 2 },
+        { key: 'shengPct',  label: '圣',    val: st.shengPct,   dec: 2 },
+        { key: 'zhongLi',   label: '终力',  val: st.zhongLi,    dec: 2 },
+        { key: 'zhongPingLi', label: '终平力', val: st.zhongPingLi, dec: 2 },
+        { key: 'maxZuiLi',  label: '最力',  val: st.maxZuiLi,   dec: 2 },
+        { key: 'minZuiPa',  label: '最趴',  val: st.minZuiPa,   dec: 2 },
+        { key: 'maxShengDuo', label: '生多', val: st.maxShengDuo, dec: 0 },
+        { key: 'maxRiDuo',  label: '日多',  val: st.maxRiDuo,   dec: 0 },
+        { key: 'daSheng',   label: '大生',  val: st.daSheng,    dec: 0 },
+        { key: 'daRi',      label: '大日',  val: st.daRi,       dec: 0 },
+        { key: 'dangSheng', label: '当生',  val: st.dangSheng,  dec: 0 },
+        { key: 'dangRi',    label: '当日',  val: st.dangRi,     dec: 0 }
+      ];
+
+      const grid = document.getElementById("freeEditGrid");
+      grid.innerHTML = fields.map(f => `
+        <div class="state-edit-item">
+          <label>${f.label}</label>
+          <input type="text" inputmode="decimal" data-key="${f.key}" data-dec="${f.dec}"
+            value="${fmtNum(f.val, f.dec)}" />
+        </div>
+      `).join("");
+
+      document.getElementById("freeEditModal").classList.add("show");
+    }
+
+    function closeFreeEditModal() {
+      document.getElementById("freeEditModal").classList.remove("show");
+    }
+
+    function saveFreeEdit() {
+      const inputsEls = document.querySelectorAll("#freeEditGrid input[data-key]");
+      const edited = {};
+      for (const inp of inputsEls) {
+        const key = inp.dataset.key;
+        const raw = inp.value.trim();
+        const num = parseFloat(raw);
+        if (isNaN(num)) {
+          toast(`「${key}」不是有效数字`);
+          return;
+        }
+        edited[key] = num;
+      }
+
+      const newBase = {
+        sheng: Math.max(0, Math.round(edited.sheng)),
+        ri: Math.max(0, Math.round(edited.ri)),
+        dangSheng: Math.max(0, Math.round(edited.dangSheng)),
+        dangRi: Math.max(0, Math.round(edited.dangRi)),
+        daSheng: Math.max(0, Math.round(edited.daSheng)),
+        daRi: Math.max(0, Math.round(edited.daRi)),
+        maxShengDuo: Math.max(0, Math.round(edited.maxShengDuo)),
+        maxRiDuo: Math.max(0, Math.round(edited.maxRiDuo)),
+        f: edited.f,
+        tf: edited.tf,
+        fan: Math.abs(edited.fan),
+        dong: edited.dong,
+        lastSign: edited.dangSheng > 0 ? 1 : (edited.dangRi > 0 ? -1 : 0),
+        maxZuiLi: edited.maxZuiLi,
+        minZuiPa: edited.minZuiPa,
+        ma: Math.max(0, Math.round(edited.ma)),
+        longxia: Math.round(edited.longxia),
+        yingSheng: edited.yingSheng,
+        pingLi: edited.pingLi,
+        shengPct: edited.shengPct,
+        maPing: edited.maPing,
+        zhongLi: edited.zhongLi,
+        zhongPingLi: edited.zhongPingLi,
+        _freeze: true
+      };
+
+      baseState = newBase;
+      inputs = [];
+      outputHistory = [];
+      redoStack = [];
+      clearPreview();
+      rebuild();
+      closeFreeEditModal();
+      toast("已设置自由初始状态");
+    }
+
+    // ========== 核心操作 ==========
+    function processNumber(x) {
+      if (typeof x !== "number" || isNaN(x) || x === 0) {
+        toast("请输入非零数值");
+        return;
+      }
+      
+      inputs.push(x);
+      redoStack = [];
+      const st = calcState(inputs);
+      const { strength, posCount, negCount } = calcUnmatched(inputs);
+      const out = formatOutput(st, strength, posCount, negCount);
+      outputHistory.push(out);
+
+      // === 屏幕泛光提示 ===
+      const glow = document.getElementById("screenGlow");
+      if (glow) {
+        glow.className = "screen-glow"; // 重置
+        void glow.offsetWidth; // 强制重绘
+        glow.classList.add(x > 0 ? "red" : "green");
+        
+        if (glow.timer) clearTimeout(glow.timer);
+        glow.timer = setTimeout(() => {
+          glow.classList.add("fade-out");
+          setTimeout(() => {
+            glow.className = "screen-glow";
+          }, 500);
+        }, 2000);
+      }
+      // =====================
+
+      // === 震动和气泡提示 ===
+      if (st.longxia === 0) {
+        vibrate();
+        bubbleToast("<span>0</span>", 1000);
+      }
+      if (st.dangRi >= 5) {
+        vibrate();
+        bubbleToast(`<span class="neg">-${st.dangRi}</span>`, 2000);
+      }
+      if (st.dangSheng >= 5) {
+        vibrate();
+        bubbleToast(`<span class="pos">${st.dangSheng}</span>`, 2000);
+      }
+      // =====================
+
+      let checkHtml = "";
+      if (inputs.length % 10 === 0 && inputs.length > 0) {
+        const result = doCheck(3);
+        if (result.ok) checkHtml = `<div class="check-msg ok">ok</div>`;
+        else {
+          checkHtml = `<div class="check-msg error">${result.msg}</div>`;
+          checkHtml += `<div class="output-card" style="margin-top:8px;min-height:auto">${result.correctHtml}</div>`;
+        }
+      }
+
+      renderOutput(out, checkHtml);
+      save();
+    }
+
+    function undo() {
+      clearPreview();
+      if (inputs.length === 0) { toast("没有可撤销的输入"); return; }
+      const removed = inputs.pop();
+      outputHistory.pop();
+      redoStack.push(removed);
+      const st = calcState(inputs);
+      const { strength, posCount, negCount } = calcUnmatched(inputs);
+      renderOutput(formatOutput(st, strength, posCount, negCount));
+      save();
+      toast("已撤销");
+    }
+
+    function redo() {
+      clearPreview();
+      if (redoStack.length === 0) { toast("没有可重做的记录"); return; }
+      const x = redoStack.pop();
+      inputs.push(x);
+      const st = calcState(inputs);
+      const { strength, posCount, negCount } = calcUnmatched(inputs);
+      const out = formatOutput(st, strength, posCount, negCount);
+      outputHistory.push(out);
+      renderOutput(out);
+      save();
+      toast("已恢复");
+    }
+
+    function doCheck(n) {
+      const len = outputHistory.length;
+      if (len === 0) return { ok: true, msg: "无数据可检查" };
+      const checkCount = Math.min(n, len);
+      const errors = [];
+      for (let i = 0; i < checkCount; i++) {
+        const idx = len - 1 - i;
+        const partial = inputs.slice(0, idx + 1);
+        const st = calcState(partial);
+        const { strength, posCount, negCount } = calcUnmatched(partial);
+        const correct = formatOutput(st, strength, posCount, negCount);
+        const stored = outputHistory[idx];
+        if (stored !== correct) errors.push({ pos: idx + 1, stored, correct });
+      }
+      if (errors.length === 0) return { ok: true, msg: n >= 20 ? "检查：最近20次无错误" : "ok" };
+      let msg = `检查：发现 ${errors.length} 处错误（最近${checkCount}次中）\n`;
+      errors.forEach(e => { msg += `\n第${e.pos}次输出有误`; });
+      
+      const st = calcState(inputs);
+      const { strength, posCount, negCount } = calcUnmatched(inputs);
+      const latestCorrect = formatOutput(st, strength, posCount, negCount);
+      const correctHtml = renderText(latestCorrect);
+      return { ok: false, msg, correctHtml, latestCorrect };
+    }
+
+    function manualCheck() {
+      clearPreview();
+      const result = doCheck(20);
+      let checkHtml = "";
+      if (result.ok) checkHtml = `<div class="check-msg ok">${result.msg}</div>`;
+      else {
+        checkHtml = `<div class="check-msg error">${result.msg.replace(/\n/g, "<br>")}</div>`;
+        checkHtml += `<div class="output-card" style="margin-top:8px;min-height:auto">${result.correctHtml}</div>`;
+      }
+      const st = calcState(inputs);
+      const { strength, posCount, negCount } = calcUnmatched(inputs);
+      renderOutput(formatOutput(st, strength, posCount, negCount), checkHtml);
+    }
+
+    // ========== 导出 / 导入 ==========
+    function getExportData() {
+      return {
+        inputs, outputHistory, baseState, chartZoom, unmatchedZoom,
+        version: 5,
+        savedAt: new Date().toISOString(),
+        note: "生日统计规则数据备份"
+      };
+    }
+
+    function openExportModal() {
+      const jsonStr = JSON.stringify(getExportData(), null, 2);
+      document.getElementById("exportText").value = jsonStr;
+      document.getElementById("exportModal").classList.add("show");
+    }
+
+    function exportToFile() {
+      const jsonStr = document.getElementById("exportText").value || JSON.stringify(getExportData(), null, 2);
+      try {
+        const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        a.download = "shengri_backup_" + ts + ".json";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+        toast("已触发下载，请到「下载」文件夹查看");
+      } catch (e) { toast("下载失败，请改用「复制内容」"); }
+    }
+
+    function copyExportText() {
+      const text = document.getElementById("exportText").value;
+      if (!text) { toast("没有内容可复制"); return; }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => toast("已复制，可粘贴到备忘录保存"))
+          .catch(() => fallbackCopy(text));
+      } else fallbackCopy(text);
+    }
+
+    function fallbackCopy(text) {
+      const ta = document.getElementById("exportText");
+      ta.focus(); ta.select();
+      try { document.execCommand("copy"); toast("已复制，可粘贴到备忘录保存"); }
+      catch (e) { toast("复制失败，请长按文本手动复制"); }
+    }
+
+    function importFromFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) { applyImportData(e.target.result); };
+      reader.onerror = function() { toast("读取文件失败"); };
+      reader.readAsText(file);
+    }
+
+    function applyImportData(raw) {
+      try {
+        const data = JSON.parse(raw);
+        if (!Array.isArray(data.inputs)) throw new Error("格式错误");
+        inputs = data.inputs.map(Number).filter(x => !isNaN(x) && x !== 0);
+        outputHistory = data.outputHistory || [];
+        if (typeof data.chartZoom === "number" && isFinite(data.chartZoom)) {
+          chartZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, data.chartZoom));
+          document.documentElement.style.setProperty("--chart-zoom", String(chartZoom));
+          updateZoomUI();
+        }
+        if (typeof data.unmatchedZoom === "number" && isFinite(data.unmatchedZoom)) {
+          unmatchedZoom = Math.max(UNMATCHED_ZOOM_MIN, Math.min(UNMATCHED_ZOOM_MAX, data.unmatchedZoom));
+          document.documentElement.style.setProperty("--unmatched-zoom", String(unmatchedZoom));
+          updateUnmatchedZoomUI();
+        }
+        if (data.baseState && typeof data.baseState === "object") {
+          baseState = Object.assign({
+            sheng: 0, ri: 0, dangSheng: 0, dangRi: 0,
+            daSheng: 0, daRi: 0, maxShengDuo: 0, maxRiDuo: 0,
+            f: 0, tf: 0, fan: 0, dong: 0, lastSign: 0,
+            maxZuiLi: 0, minZuiPa: 0, _freeze: false,
+            ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+            shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0
+          }, data.baseState);
+        } else {
+          baseState = {
+            sheng: 0, ri: 0, dangSheng: 0, dangRi: 0,
+            daSheng: 0, daRi: 0, maxShengDuo: 0, maxRiDuo: 0,
+            f: 0, tf: 0, fan: 0, dong: 0, lastSign: 0,
+            maxZuiLi: 0, minZuiPa: 0, _freeze: false,
+            ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+            shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0
+          };
+        }
+        redoStack = [];
+        clearPreview();
+        rebuild();
+        document.getElementById("importModal").classList.remove("show");
+        toast("导入成功 · 共" + inputs.length + "次");
+      } catch (err) { toast("导入失败：内容格式不正确"); }
+    }
+
+    // ========== 事件绑定 ==========
+    const numInput = document.getElementById("numInput");
+
+    function submit() {
+      let raw = numInput.value.trim();
+      if (!raw) return;
+
+      if (raw === "6") { vibrate(); clearPreview(); manualCheck(); numInput.value = ""; return; }
+
+      const x = parseFloat(raw);
+      if (isNaN(x) || x === 0) {
+        vibrate();
+        numInput.classList.add("error");
+        setTimeout(() => numInput.classList.remove("error"), 500);
+        toast("请输入非零数值", true);
+        return;
+      }
+      
+      if (x % 5 !== 0) {
+        vibrate();
+        numInput.classList.add("error");
+        setTimeout(() => numInput.classList.remove("error"), 500);
+        toast("5、6", true);
+        return;
+      }
+
+      vibrate();
+      clearPreview();
+      processNumber(x);
+      numInput.value = "";
+      numInput.focus();
+    }
+
+    document.getElementById("submitBtn").addEventListener("click", () => {
+      vibrate();
+      submit();
+    });
+    
+    numInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+    numInput.addEventListener("input", updatePreview);
+
+    document.getElementById("undoBtn").addEventListener("click", () => { vibrate(); undo(); });
+    document.getElementById("redoBtn").addEventListener("click", () => { vibrate(); redo(); });
+
+    document.getElementById("chartBtn").addEventListener("click", () => { vibrate(); toggleChartMode(); });
+    document.getElementById("panelBtn").addEventListener("click", () => { vibrate(); togglePanel(); });
+
+    // === 图表缩放事件 ===
+    document.getElementById("zoomInBtn").addEventListener("click", () => {
+      vibrate();
+      setChartZoom(chartZoom * ZOOM_STEP);
+    });
+    document.getElementById("zoomOutBtn").addEventListener("click", () => {
+      vibrate();
+      setChartZoom(chartZoom / ZOOM_STEP);
+    });
+    document.getElementById("zoomLabelBtn").addEventListener("click", () => {
+      vibrate();
+      setChartZoom(1);
+      toast("曲线已重置为 100%");
+    });
+
+    // === 未抵消缩放事件 ===
+    document.getElementById("unmatchedZoomInBtn").addEventListener("click", () => {
+      vibrate();
+      setUnmatchedZoom(unmatchedZoom * UNMATCHED_ZOOM_STEP);
+    });
+    document.getElementById("unmatchedZoomOutBtn").addEventListener("click", () => {
+      vibrate();
+      setUnmatchedZoom(unmatchedZoom / UNMATCHED_ZOOM_STEP);
+    });
+    document.getElementById("unmatchedZoomLabelBtn").addEventListener("click", () => {
+      vibrate();
+      setUnmatchedZoom(1);
+      toast("未抵消已重置为 100%");
+    });
+
+    document.getElementById("stateEditBtn").addEventListener("click", () => { vibrate(); openStateEditModal(); });
+    document.getElementById("closeStateEdit").addEventListener("click", () => { vibrate(); closeStateEditModal(); });
+    document.getElementById("saveStateEdit").addEventListener("click", () => { vibrate(); saveStateEdit(); });
+
+    document.getElementById("freeEditBtn").addEventListener("click", () => { vibrate(); openFreeEditModal(); });
+    document.getElementById("closeFreeEdit").addEventListener("click", () => { vibrate(); closeFreeEditModal(); });
+    document.getElementById("saveFreeEdit").addEventListener("click", () => { vibrate(); saveFreeEdit(); });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      vibrate();
+      if (!confirm("确定清空所有数据（含基线）？此操作不可恢复。")) return;
+      inputs = [];
+      outputHistory = [];
+      redoStack = [];
+      baseState = {
+        sheng: 0, ri: 0, dangSheng: 0, dangRi: 0,
+        daSheng: 0, daRi: 0, maxShengDuo: 0, maxRiDuo: 0,
+        f: 0, tf: 0, fan: 0, dong: 0, lastSign: 0,
+        maxZuiLi: 0, minZuiPa: 0, _freeze: false,
+        ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+        shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0
+      };
+      clearPreview();
+      renderOutput(formatOutput(calcState([]), 0, 0, 0));
+      document.getElementById("checkArea").innerHTML = "";
+      save();
+      toast("已清空");
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", () => { vibrate(); openExportModal(); });
+    document.getElementById("closeExport").addEventListener("click", () => {
+      vibrate();
+      document.getElementById("exportModal").classList.remove("show");
+    });
+    document.getElementById("doExport").addEventListener("click", () => { vibrate(); exportToFile(); });
+    document.getElementById("copyExport").addEventListener("click", () => { vibrate(); copyExportText(); });
+
+    document.getElementById("importBtn").addEventListener("click", () => {
+      vibrate();
+      document.getElementById("importText").value = "";
+      document.getElementById("importModal").classList.add("show");
+    });
+    document.getElementById("closeImport").addEventListener("click", () => {
+      vibrate();
+      document.getElementById("importModal").classList.remove("show");
+    });
+    document.getElementById("pickFileBtn").addEventListener("click", () => {
+      vibrate();
+      document.getElementById("fileInput").click();
+    });
+    document.getElementById("fileInput").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) importFromFile(file);
+      e.target.value = "";
+    });
+    document.getElementById("doImportText").addEventListener("click", () => {
+      vibrate();
+      const raw = document.getElementById("importText").value.trim();
+      if (!raw) { toast("请先粘贴备份内容"); return; }
+      applyImportData(raw);
+    });
+
+    document.querySelectorAll(".modal-overlay").forEach(el => {
+      el.addEventListener("click", e => {
+        if (e.target === el) {
+          vibrate();
+          el.classList.remove("show");
+        }
+      });
+    });
+
+    document.getElementById("recentDetail").addEventListener("scroll", () => {
+      if (detailLock) return;
+      renderDetailRows();
+    });
+
+    window.addEventListener("resize", renderChart);
+
+    // 初始化
+    load();
+    document.documentElement.style.setProperty("--chart-zoom", String(chartZoom));
+    document.documentElement.style.setProperty("--unmatched-zoom", String(unmatchedZoom));
+    applyChartMode();
+    updateZoomUI();
+    updateUnmatchedZoomUI();
+    renderOutput(formatOutput(calcState(inputs), 0, 0, 0));
+    renderChart();
+
+    let lastTouch = 0;
+    document.addEventListener("touchend", e => {
+      const now = Date.now();
+      if (now - lastTouch <= 300) e.preventDefault();
+      lastTouch = now;
+    }, { passive: false });
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

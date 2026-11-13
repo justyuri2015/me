@@ -1,0 +1,3107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0d0d0d" />
+    <meta name="description" content="生日统计规则 App" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <title>生日统计</title>
+    <style>
+    :root {
+      --bg: #0d0d0d;
+      --card: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #e8e8e8;
+      --muted: #888;
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --orange: #f97316;
+      --fuchsia: #d946ef;
+      --cyan: #22d3ee;
+      --input-bg: #222;
+      --chart-zoom: 1;
+      --unmatched-zoom: 1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      font-size: 15px;
+      line-height: 1.4;
+      overscroll-behavior: none;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      max-width: 480px;
+      margin: 0 auto;
+      height: 100dvh;
+      overflow: hidden;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    .screen-glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+    }
+    .screen-glow.red { box-shadow: inset 0 0 50px 15px rgba(239, 68, 68, 0.8); opacity: 1; }
+    .screen-glow.green { box-shadow: inset 0 0 50px 15px rgba(34, 197, 94, 0.8); opacity: 1; }
+    .screen-glow.yellow { box-shadow: inset 0 0 55px 18px rgba(234, 179, 8, 0.85); opacity: 1; }
+    .screen-glow.fade-out { opacity: 0; transition: opacity 0.5s ease-out; }
+
+    .input-area {
+      background: var(--card); 
+      border-bottom: 1px solid var(--border);
+      padding: 12px 14px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .main { 
+      flex: 1; 
+      overflow-y: auto; 
+      padding: 12px 14px 20px; 
+      -webkit-overflow-scrolling: touch; 
+    }
+    .num-pos { color: #ef4444; }
+    .num-neg { color: #22c55e; }
+    .num-zero { color: var(--text); }
+
+    .chart-area {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 8px 10px 10px; margin-bottom: 12px;
+    }
+    .chart-area.hidden { display: none; }
+    .chart-item + .chart-item { margin-top: 6px; }
+    .chart-item-title { font-size: 10px; color: var(--muted); margin-bottom: 2px; padding-left: 2px; }
+    .chart-canvas {
+      display: block; width: 100%;
+      height: calc(80px * var(--chart-zoom, 1));
+    }
+    .chart-area.mode-single .chart-canvas { height: calc(180px * var(--chart-zoom, 1)); }
+
+    .chart-toolbar {
+      display: flex; justify-content: flex-end; align-items: center;
+      gap: 6px; margin-bottom: 6px;
+    }
+    .zoom-btn, .zoom-label-btn {
+      background: #2a2a2a; border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; cursor: pointer; padding: 0; user-select: none;
+      transition: opacity 0.15s, transform 0.1s, background-color 0.15s;
+    }
+    .zoom-btn {
+      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; line-height: 1;
+    }
+    .zoom-label-btn {
+      min-width: 48px; height: 28px; font-size: 11px; font-weight: 600;
+      color: var(--muted); font-family: "SF Mono", Menlo, Consolas, monospace;
+      letter-spacing: 0.3px;
+    }
+    .zoom-btn:active, .zoom-label-btn:active { transform: scale(0.94); }
+    .zoom-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .zoom-btn:hover, .zoom-label-btn:hover { background: #333; }
+
+    .chart-toolbar.unmatched-toolbar {
+      justify-content: space-between; align-items: center; gap: 8px;
+    }
+    .zoom-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .unmatched-stats {
+      display: flex; align-items: center; gap: 10px;
+      min-height: 28px; min-width: 0; flex: 1;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 13px; font-weight: 700; white-space: nowrap;
+      overflow-x: auto; overflow-y: hidden; padding-right: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .unmatched-stats .stats-item { display: inline-flex; align-items: center; flex-shrink: 0; }
+    .unmatched-stats .stats-sep { color: var(--muted); margin: 0 1px; font-weight: 400; }
+
+    .unmatched-preview-wrap {
+      position: relative; flex-shrink: 0; height: 28px; min-width: 116px;
+      display: flex; align-items: center; justify-content: flex-end;
+    }
+    .unmatched-preview-wrap .zoom-group {
+      position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+    }
+    .unmatched-preview {
+      position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+      display: none; flex-direction: column; justify-content: center; align-items: flex-end;
+      gap: 2px; padding: 3px 6px;
+      background: rgba(26, 26, 26, 0.98); border: 1px solid var(--border);
+      border-radius: 8px; font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px; font-weight: 700; line-height: 1.1; white-space: nowrap;
+      z-index: 2; pointer-events: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    }
+    .unmatched-preview.show { display: flex; }
+    .preview-row { display: flex; align-items: center; gap: 4px; }
+    .preview-row::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    }
+    .preview-row.win-row::before { background: #ef4444; }
+    .preview-row.lose-row::before { background: #22c55e; }
+    .preview-sep { color: var(--muted); }
+
+    .float-area {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 10px 12px; margin-bottom: 12px;
+    }
+    .float-area.hidden { display: none; }
+    .float-area .float-row {
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-size: 13px; line-height: 1.8; white-space: nowrap;
+      overflow-x: auto; color: var(--text);
+    }
+
+    .unmatched-area {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 8px 12px 10px; margin-bottom: 12px;
+    }
+    .unmatched-area.hidden { display: none; }
+    .unmatched-list {
+      display: flex; flex-wrap: wrap;
+      gap: calc(6px * var(--unmatched-zoom, 1));
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: calc(15px * var(--unmatched-zoom, 1));
+      line-height: 1.25;
+      max-height: calc(109px * var(--unmatched-zoom, 1));
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
+    .unmatched-list span {
+      background: #2a2a2a;
+      padding: calc(2px * var(--unmatched-zoom, 1)) calc(8px * var(--unmatched-zoom, 1));
+      border-radius: 4px;
+    }
+    .unmatched-list span.unmatched-empty {
+      background: transparent; padding: 0; font-size: 12px; color: var(--muted);
+    }
+
+    .recent-box {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px 14px; margin-bottom: 12px;
+    }
+    .recent-list {
+      display: flex; flex-wrap: wrap; gap: 3px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 11px; font-weight: 600; letter-spacing: 0;
+      min-height: 20px; align-items: center;
+    }
+    .recent-list .win { color: #ef4444; background: rgba(239, 68, 68, 0.15); padding: 1px 4px; border-radius: 4px; }
+    .recent-list .lose { color: #22c55e; background: rgba(34, 197, 94, 0.15); padding: 1px 4px; border-radius: 4px; }
+    .recent-list .empty { color: var(--muted); font-size: 12px; font-weight: 400; }
+
+    .output-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px;
+      font-family: "SF Mono", "Menlo", "Consolas", "PingFang SC", monospace;
+      font-size: 17.5px;
+      line-height: 1.65; white-space: pre-wrap; word-break: break-all;
+      margin-bottom: 14px; min-height: 320px;
+    }
+    .output-card .num-big { font-weight: 700; font-size: 1.35em; }
+    .output-card .preview-pingli { color: var(--orange); font-size: 0.98em; }
+    .output-card .preview-win { color: #ef4444; font-weight: 700; font-size: 1.3em; }
+    .output-card .preview-lose { color: #22c55e; font-weight: 700; font-size: 1.3em; }
+
+    .recent-detail {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 0 12px; margin-bottom: 14px; max-height: 220px;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 13px; line-height: 22px;
+    }
+    .recent-detail .detail-row {
+      display: grid;
+      grid-template-columns: 30px 46px 46px 1fr 1fr 20px;
+      gap: 4px;
+      align-items: center;
+      height: 22px;
+      width: 100%;
+      position: relative;
+    }
+    .recent-detail .detail-row.zero-lx-line::before {
+      content: ''; position: absolute; left: -12px; right: -12px; top: -1px;
+      height: 2px; background-color: #eab308; z-index: 1;
+    }
+    .recent-detail .d-idx { text-align: center; color: var(--muted); font-size: 11px; }
+    .recent-detail .d-tl { text-align: center; color: var(--fuchsia); font-size: 12px; }
+    .recent-detail .d-tz { text-align: center; color: var(--fuchsia); font-size: 12px; }
+    .recent-detail .d-tl.pos,
+    .recent-detail .d-tz.pos { color: #ef4444; }
+    .recent-detail .d-tl.neg,
+    .recent-detail .d-tz.neg { color: #22c55e; }
+    .recent-detail .d-in { text-align: center; color: var(--text); }
+    .recent-detail .d-f { text-align: center; color: var(--text); }
+    .recent-detail .d-in.pos,
+    .recent-detail .d-f.pos { color: #ef4444; }
+    .recent-detail .d-in.neg,
+    .recent-detail .d-f.neg { color: #22c55e; }
+    .recent-detail .d-sign { text-align: center; font-weight: 700; }
+    .recent-detail .d-sign.pos { color: #ef4444; }
+    .recent-detail .d-sign.neg { color: #22c55e; }
+    .recent-detail .detail-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 6px 0; }
+
+    /* ===== 全屏显示模式 ===== */
+    body.view-detail-full .chart-area,
+    body.view-detail-full .float-area,
+    body.view-detail-full .unmatched-area,
+    body.view-detail-full .recent-box,
+    body.view-detail-full #checkArea,
+    body.view-detail-full .output-card {
+      display: none !important;
+    }
+    body.view-detail-full .main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 12px 14px 20px;
+    }
+    body.view-detail-full .recent-detail {
+      flex: 1;
+      height: 0;
+      max-height: none !important;
+      margin-bottom: 0;
+    }
+
+    body.view-output-full .chart-area,
+    body.view-output-full .float-area,
+    body.view-output-full .unmatched-area,
+    body.view-output-full .recent-box,
+    body.view-output-full #checkArea,
+    body.view-output-full .recent-detail {
+      display: none !important;
+    }
+    body.view-output-full .main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 12px 14px 20px;
+    }
+    body.view-output-full .output-card {
+      flex: 1;
+      height: 0;
+      min-height: 0 !important;
+      margin-bottom: 0;
+      overflow-y: auto;
+    }
+
+    body.view-chart-full .float-area,
+    body.view-chart-full .unmatched-area,
+    body.view-chart-full .recent-box,
+    body.view-chart-full #checkArea,
+    body.view-chart-full .output-card,
+    body.view-chart-full .recent-detail {
+      display: none !important;
+    }
+    body.view-chart-full .main {
+      padding: 12px 14px 20px;
+      overflow-y: auto !important; 
+    }
+    body.view-chart-full .chart-area {
+      display: block;
+      margin-bottom: 0;
+    }
+    body.view-chart-full .chart-item {
+      display: block;
+      margin-bottom: 16px;
+    }
+    body.view-chart-full .chart-canvas {
+      height: calc(32vh * var(--chart-zoom, 1)) !important; 
+    }
+    body.view-chart-full .chart-area.mode-single .chart-canvas {
+      height: calc(75vh * var(--chart-zoom, 1)) !important;
+    }
+
+    .check-msg {
+      background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+      padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #94a3b8;
+    }
+    .check-msg.error { background: #450a0a; border-color: #7f1d1d; color: #fca5a5; }
+    .check-msg.ok { background: #052e16; border-color: #166534; color: #86efac; }
+
+    .input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    #numInput {
+      flex: 1; background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 18px;
+      padding: 12px 14px; outline: none; text-align: center; font-weight: 500;
+      transition: border-color 0.2s, color 0.2s, background-color 0.2s;
+    }
+    #numInput:focus { border-color: var(--accent); }
+
+    @keyframes shake {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      50% { transform: translateX(6px); }
+      75% { transform: translateX(-6px); }
+      100% { transform: translateX(0); }
+    }
+    #numInput.error {
+      border-color: var(--yellow); color: var(--yellow);
+      background-color: rgba(234, 179, 8, 0.12);
+      animation: shake 0.3s ease;
+    }
+
+    .btn {
+      border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+      padding: 12px 16px; cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s; user-select: none;
+    }
+    .btn:active { transform: scale(0.96); opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #fff; flex: 0 0 auto; min-width: 72px; }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .btn-row .btn { font-size: 13px; padding: 10px 6px; }
+    .btn-secondary { background: #2a2a2a; color: var(--text); font-size: 13px; padding: 10px 6px; }
+    .btn-danger { background: #3f1a1a; color: #fca5a5; }
+    .btn-success { background: #1a3f2a; color: #86efac; }
+    .btn-warn { background: #3f351a; color: #fde68a; }
+    .btn-redo { background: #1e2a3f; color: #93c5fd; }
+    .btn-chart { background: #1a2f3f; color: #7dd3fc; }
+    .btn-panel { background: #2a1f3f; color: #c4b5fd; }
+    .btn-panel.active { background: #4c1d95; color: #e9d5ff; }
+    .btn-fulledit { background: #1f3a2a; color: #86efac; }
+    .btn-clear { background: #3f1a1a; color: #fca5a5; font-size: 12px; padding: 8px 6px; }
+    .btn-tian { background: #2a1f3f; color: #e9d5ff; }
+    .btn-detail { background: #2a2a2a; color: #fde68a; font-weight: 700; }
+    .btn-snap { background: #1f2a3f; color: #93c5fd; }
+
+    .toolbar-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px;
+    }
+    .toolbar-grid .btn { font-size: 12px; padding: 9px 6px; }
+    #detailBtn { display: none; }
+    .toolbar-grid.panel-hidden {
+      grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    }
+    .toolbar-grid.panel-hidden .col-hide {
+      display: none;
+    }
+    .toolbar-grid.panel-hidden #detailBtn {
+      display: block;
+    }
+
+    .hint { text-align: center; font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: flex-end; justify-content: center;
+      z-index: 100; padding: 16px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--card); border-radius: 16px 16px 12px 12px;
+      width: 100%; max-width: 420px; max-height: 85vh; overflow-y: auto;
+      padding: 18px 16px 20px; -webkit-overflow-scrolling: touch;
+    }
+    .modal h3 { font-size: 16px; margin-bottom: 12px; text-align: center; }
+    .modal p { font-size: 13px; color: var(--muted); margin-bottom: 14px; text-align: center; line-height: 1.5; }
+    .modal .btn-row { grid-template-columns: 1fr 1fr; }
+    .modal .btn-row .btn { font-size: 13px; padding: 10px 6px; }
+
+    .toast {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(30,30,30,0.95); color: #fff;
+      padding: 12px 20px; border-radius: 10px; font-size: 14px;
+      z-index: 200; opacity: 0; visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      pointer-events: none; border: 1px solid var(--border); text-align: center;
+    }
+    .toast.show { opacity: 1; visibility: visible; }
+
+    .toast.warn-big {
+      font-size: 18px; font-weight: 800; letter-spacing: 1px; color: #eab308;
+      background: rgba(38, 31, 4, 0.97);
+      border: 2px solid rgba(234, 179, 8, 0.75);
+      border-radius: 14px; padding: 18px 34px;
+      box-shadow: 0 0 26px rgba(234, 179, 8, 0.38), 0 10px 30px rgba(0,0,0,0.35);
+    }
+    .toast.bubble {
+      background: #e0f2fe; color: #0c4a6e;
+      padding: 30px 50px; border-radius: 18px;
+      font-size: 38px; font-weight: bold;
+      border: 2px solid #bae6fd;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .toast.bubble span.pos { color: #ef4444; font-size: 41px; }
+    .toast.bubble span.neg { color: #22c55e; font-size: 41px; }
+
+    .count-badge {
+      display: inline-block; background: #333; border-radius: 6px;
+      padding: 2px 7px; font-size: 11px; color: var(--muted); margin-left: 6px;
+    }
+    #fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; z-index: -1; }
+    .modal textarea {
+      width: 100%; height: 140px; background: var(--input-bg);
+      border: 1px solid var(--border); border-radius: 10px; color: var(--text);
+      padding: 10px; font-size: 12px; font-family: monospace;
+      resize: vertical; margin-bottom: 12px;
+    }
+    .modal .tip { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
+
+    .state-edit-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;
+    }
+    .state-edit-item { display: flex; flex-direction: column; gap: 4px; }
+    .state-edit-item label { font-size: 11px; color: var(--muted); padding-left: 2px; }
+    .state-edit-item input {
+      background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); padding: 8px 10px;
+      font-size: 14px; text-align: center; outline: none; width: 100%;
+    }
+    .state-edit-item input:focus { border-color: var(--accent); }
+
+    .edit-section-title {
+      display: flex; align-items: center; font-size: 12px;
+      color: var(--muted); margin: 12px 0 8px; padding-left: 2px; font-weight: 600;
+    }
+    .detail-edit-list {
+      max-height: 200px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 8px; margin-bottom: 10px; background: #151515;
+    }
+    .detail-edit-row {
+      display: grid; grid-template-columns: 42px 1fr; gap: 8px;
+      align-items: center; margin-bottom: 6px;
+    }
+    .detail-edit-row:last-child { margin-bottom: 0; }
+    .detail-edit-row .idx {
+      font-size: 11px; color: var(--muted);
+      font-family: "SF Mono", Menlo, Consolas, monospace; text-align: right;
+    }
+    .detail-edit-row input {
+      background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); padding: 7px 10px;
+      font-size: 13px; text-align: center; outline: none; width: 100%;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+    }
+    .detail-edit-row input.pos { color: #ef4444; }
+    .detail-edit-row input.neg { color: #22c55e; }
+    .detail-edit-row input:focus { border-color: var(--accent); }
+    .detail-edit-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 0; }
+    .detail-edit-more { color: var(--muted); font-size: 11px; text-align: center; padding: 4px 0 8px; }
+
+    .um-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .um-tools .btn { font-size: 12px; padding: 8px 6px; }
+    .um-tools-clear { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+
+    .range-input-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .range-input-area input {
+      flex: 1;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 8px;
+      font-size: 14px;
+      text-align: center;
+      outline: none;
+    }
+    .range-input-area input:focus { border-color: var(--accent); }
+
+    .tian-snap-list {
+      max-height: 320px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 6px; margin-bottom: 12px; background: #151515;
+    }
+    .tian-snap-row {
+      display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
+      padding: 8px 6px; border-bottom: 1px solid #222;
+    }
+    .tian-snap-row:last-child { border-bottom: none; }
+    .tian-snap-info { min-width: 0; }
+    .tian-snap-time {
+      font-size: 12px; color: var(--text);
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tian-snap-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .tian-snap-row .btn { font-size: 11px; padding: 6px 10px; }
+    .tian-snap-row .btn.active { background: #4c1d95; color: #e9d5ff; }
+    </style>
+  </head>
+  <body>
+    <div class="screen-glow" id="screenGlow"></div>
+    <div class="input-area">
+      <div class="input-row">
+        <input type="text" id="numInput" inputmode="decimal" placeholder="输入数值" autocomplete="off" enterkeyhint="done" />
+        <button class="btn btn-primary" id="submitBtn">确认</button>
+      </div>
+      <div class="toolbar-grid" id="toolbarGrid">
+        <button class="btn btn-warn" id="undoBtn">撤</button>
+        <button class="btn btn-fulledit col-hide" id="fullEditBtn">全编辑</button>
+        <button class="btn btn-secondary col-hide" id="freeEditBtn">自由编辑</button>
+        <button class="btn btn-redo" id="redoBtn">重</button>
+        <button class="btn btn-secondary col-hide" id="exportBtn">导数据</button>
+        <button class="btn btn-secondary col-hide" id="exportDetailBtn">导明细</button>
+        <button class="btn btn-secondary col-hide" id="importBtn">导入</button>
+        <button class="btn btn-chart col-hide" id="chartBtn">隐藏</button>
+        <button class="btn btn-danger col-hide" id="resetBtn">清空</button>
+        <button class="btn btn-tian col-hide" id="tianClearBtn">天清零</button>
+        <button class="btn btn-snap" id="tianSnapBtn">天快照</button>
+        <button class="btn btn-detail" id="detailBtn">明细</button>
+        <button class="btn btn-panel" id="panelBtn">版</button>
+      </div>
+      <div class="hint">数据自动保存在本机 · 每满 120 条自动导出</div>
+    </div>
+    <div class="main">
+      <div class="chart-area" id="chartArea">
+        <div class="chart-toolbar">
+          <button class="zoom-btn" id="zoomOutBtn" aria-label="缩小图表" title="缩小">−</button>
+          <button class="zoom-label-btn" id="zoomLabelBtn" title="点击重置为 100%">100%</button>
+          <button class="zoom-btn" id="zoomInBtn" aria-label="放大图表" title="放大">+</button>
+        </div>
+        <div class="chart-item" id="chartItemA">
+          <div class="chart-item-title">力 + 总力</div>
+          <canvas id="chartA" class="chart-canvas"></canvas>
+        </div>
+        <div class="chart-item" id="chartItemB">
+          <div class="chart-item-title">龙虾</div>
+          <canvas id="chartB" class="chart-canvas"></canvas>
+        </div>
+        <div class="chart-item" id="chartItemC">
+          <div class="chart-item-title">天力 + 天总力</div>
+          <canvas id="chartC" class="chart-canvas"></canvas>
+        </div>
+        <div class="chart-item" id="chartItemD">
+          <div class="chart-item-title">天龙</div>
+          <canvas id="chartD" class="chart-canvas"></canvas>
+        </div>
+      </div>
+      <div class="float-area hidden" id="floatArea"></div>
+      <div class="unmatched-area hidden" id="unmatchedArea">
+        <div class="chart-toolbar unmatched-toolbar">
+          <div class="unmatched-stats" id="unmatchedStats"></div>
+          <div class="unmatched-preview-wrap">
+            <div class="zoom-group" id="unmatchedZoomGroup">
+              <button class="zoom-btn" id="unmatchedZoomOutBtn" aria-label="缩小未抵消数值" title="缩小">−</button>
+              <button class="zoom-label-btn" id="unmatchedZoomLabelBtn" title="点击重置为 100%">100%</button>
+              <button class="zoom-btn" id="unmatchedZoomInBtn" aria-label="放大未抵消数值" title="放大">+</button>
+            </div>
+            <div class="unmatched-preview" id="unmatchedPreview"></div>
+          </div>
+        </div>
+        <div class="unmatched-list" id="unmatchedList"></div>
+      </div>
+      <div class="recent-box">
+        <div class="recent-list" id="recentList"><span class="empty">暂无记录</span></div>
+      </div>
+      <div id="checkArea"></div>
+      <div class="output-card" id="output">马：0 马平：0 天马：0
+道：0 天道：0
+龙虾：0 应生：0 圣：0.00
+力：0 平力：0
+总力：0 实力：0
+终力：0 终平力：0
+天龙：0 天应生：0 天圣：0.00
+天力：0 天平力：0
+天力1：0 天平力1：0
+天总力：0 天实力：0
+天终力：0 天终平力：0
+大生：0 大日：-0 当生：0 当日：-0
+最力：0 最趴：0
+生：0 日：-0 天生：0 天日：-0
+生多：+0 日多：-0 天马平：0
+饭：0 洞：0 天饭：0</div>
+        <div class="recent-detail" id="recentDetail">
+          <div class="detail-empty">暂无记录</div>
+        </div>
+      </div>
+      <input type="file" id="fileInput" accept=".json,application/json,text/plain,.txt" />
+      
+      <div class="modal-overlay" id="exportModal">
+        <div class="modal">
+          <h3>导出数据</h3>
+          <div class="tip">如果手机没有弹出下载，请用下面「复制内容」，把文字保存到备忘录或文件里。</div>
+          <textarea id="exportText" readonly></textarea>
+          <div class="btn-row" style="margin-bottom:8px">
+            <button class="btn btn-secondary" id="copyExport">复制内容</button>
+            <button class="btn btn-primary" id="doExport">尝试下载文件</button>
+          </div>
+          <button class="btn btn-secondary" id="closeExport" style="width:100%">关闭</button>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="exportDetailModal">
+        <div class="modal">
+          <h3>导出明细（适用于WPS）</h3>
+          <div class="tip">数据已分为两列：符号和数值。可输入指定序号范围，点击「提取」后，然后分别复制或下载。</div>
+          
+          <div class="range-input-area">
+            <span>从</span>
+            <input type="number" id="exportRangeStart" value="1" min="1">
+            <span>到</span>
+            <input type="number" id="exportRangeEnd" value="1" min="1">
+            <button class="btn btn-secondary" id="applyRangeBtn" style="padding:8px 14px; font-size:13px;">提取</button>
+          </div>
+          
+          <div class="edit-section-title">符号列</div>
+          <textarea id="exportDetailSymbols" readonly style="height:120px; margin-bottom:8px;"></textarea>
+          <div class="btn-row" style="margin-bottom:12px; grid-template-columns: 1fr 1fr;">
+            <button class="btn btn-secondary" id="copyExportSymbols">复制符号</button>
+            <button class="btn btn-primary" id="doExportSymbols">下载符号</button>
+          </div>
+          
+          <div class="edit-section-title">数值列</div>
+          <textarea id="exportDetailValues" readonly style="height:120px; margin-bottom:8px;"></textarea>
+          <div class="btn-row" style="margin-bottom:12px; grid-template-columns: 1fr 1fr;">
+            <button class="btn btn-secondary" id="copyExportValues">复制数值</button>
+            <button class="btn btn-primary" id="doExportValues">下载数值</button>
+          </div>
+          
+          <button class="btn btn-secondary" id="closeExportDetail" style="width:100%">关闭</button>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="importModal">
+        <div class="modal">
+          <h3>导入数据</h3>
+          <div class="tip">方式一：点下面按钮选择之前导出的 .json 文件<br>方式二：把备份内容粘贴到下面文本框，再点「从文本导入」</div>
+          <button class="btn btn-primary" id="pickFileBtn" style="width:100%;margin-bottom:12px">选择本地文件</button>
+          <textarea id="importText" placeholder="或者把备份的 JSON 内容粘贴到这里..."></textarea>
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="closeImport">取消</button>
+            <button class="btn btn-primary" id="doImportText">从文本导入</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="freeEditModal">
+        <div class="modal">
+          <h3>自由编辑（全部项目）</h3>
+          <div class="tip">
+            可编辑所有状态数值、最近 10 条明细记录、以及未抵消区域的数据与实力。<b>不做任何反推</b>。
+            保存后作为新起点，<b>原有记录全部保留</b>，之后新输入在此基础上继续累积。
+            未抵消区域保存后作为<b>起始池</b>，新输入会在此池基础上按规则继续抵消。
+            <br>注：生多 / 日多 / 大生 / 大日 / 当生 / 当日 / 最力 / 最趴 为历史累计量，若不动则保留当前值。
+          </div>
+          <div class="state-edit-grid" id="freeEditGrid"></div>
+          <div class="edit-section-title">
+            明细记录（最近 10 条）
+            <span class="count-badge" id="detailCountBadge">0</span>
+          </div>
+          <div class="detail-edit-list" id="detailEditList"></div>
+          <div class="edit-section-title">
+            未抵消区域
+            <span class="count-badge" id="umCountBadge">0</span>
+          </div>
+          <div class="detail-edit-list" id="umEditList"></div>
+          <div class="um-tools">
+            <button class="btn btn-secondary" id="umAddBtn">＋ 添加一项</button>
+            <button class="btn btn-secondary" id="umDelBtn">－ 删除最后一项</button>
+          </div>
+          <div class="um-tools-clear">
+            <button class="btn btn-clear" id="umClearBtn">清除未抵消全部</button>
+            <button class="btn btn-clear" id="detailClearBtn">清除明细全部</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="closeFreeEdit">取消</button>
+            <button class="btn btn-primary" id="saveFreeEdit">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="tianSnapModal">
+        <div class="modal">
+          <h3>天清零快照</h3>
+          <div class="tip">
+            每次点击「天清零」都会自动保存一份快照（含时间戳）。<br>
+            快照保存了该时刻的完整天龙 / 天终力明细，可随时恢复。<br>
+            <b>恢复快照不会删除任何快照</b>，所有快照永久保留，可反复调用。<br>
+            删除快照只影响历史明细的补全显示（已归档的明细不受影响）。
+          </div>
+          <div class="tian-snap-list" id="tianSnapList"></div>
+          <button class="btn btn-secondary" id="closeTianSnap" style="width:100%">关闭</button>
+        </div>
+      </div>
+
+      <div class="toast" id="toast"></div>
+      <script>
+    // ========== 符号设置 ==========
+    const SYMBOL_WIN = "√";
+    const SYMBOL_LOSE = "×";
+
+    // ========== 核心状态 ==========
+    let inputs = [];
+    let outputHistory = [];
+    let redoStack = [];
+    let previewData = null;
+    let lxHistory = [];
+    let tianDetailData = [];       // 当前计算出的天明细（每行 {longxia, zhongLi}）
+    let detailTianArchive = [];    // 永久归档：每行天明细，不因天清零/删快照丢失
+    let tianSnapshots = [];        // 天清零快照（恢复不删除）
+    let unmatchedOverride = null;
+    let detailCleared = false;
+    let tianStartIndex = 0;
+    let tianClearMark = 0;
+    
+    // 0: 正常, 1: 全屏明细, 2: 全屏输出, 3: 全屏4图
+    let viewState = 0;
+    let savedChartMode = null;
+
+    let baseState = {
+      sheng: 0, ri: 0, dangSheng: 0, dangRi: 0,
+      daSheng: 0, daRi: 0, maxShengDuo: 0, maxRiDuo: 0,
+      f: 0, tf: 0, fan: 0, dong: 0, lastSign: 0,
+      maxZuiLi: 0, minZuiPa: 0,
+      _freeze: false,
+      _frozenAt: 0,
+      ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+      shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0,
+      tianF1: 0
+    };
+
+    let chartMode = 7; // 默认未抵消
+    const CHART_MODE_LABELS = ["隐藏", "四图全显", "力+总力", "龙虾", "天力+天总力", "天龙", "浮动", "未抵消"];
+
+    let chartZoom = 1;
+    const ZOOM_MIN = 0.5;
+    const ZOOM_MAX = 3;
+    const ZOOM_STEP = 1.25;
+
+    let unmatchedZoom = 1;
+    const UNMATCHED_ZOOM_MIN = 0.5;
+    const UNMATCHED_ZOOM_MAX = 3;
+    const UNMATCHED_ZOOM_STEP = 1.25;
+
+    let panelHidden = false;
+
+    const RECENT_LIMIT = 38;
+    const DETAIL_ROW_H = 22;
+    const AUTO_EXPORT_COUNT = 120;
+
+    const STORAGE_KEY = "shengri_app_v5";
+
+    const SPECIAL_FORCE_MAP = {
+      5: 2.25, 10: 7, 15: 11.75, 20: 16.5, 25: 21.25,
+      30: 26, 35: 30.75, 40: 35.5, 45: 40.25
+    };
+
+    // ========== 工具函数 ==========
+    function vibrate() {
+      if (navigator.vibrate) { try { navigator.vibrate(30); } catch(e) {} }
+    }
+
+    function fmtNum(n, maxDec = 1) {
+      if (n === 0) return "0";
+      let s = Number(n).toFixed(maxDec);
+      if (s.indexOf('.') !== -1) {
+        s = s.replace(/\.?0+$/, "");
+      }
+      if (s === "-0") s = "0";
+      return s;
+    }
+    function fmtSheng(n) { return (n === 0 ? 0 : n).toFixed(2); }
+
+    function calcSingleForce(x) {
+      if (x > 0) {
+        if (Object.prototype.hasOwnProperty.call(SPECIAL_FORCE_MAP, x)) return SPECIAL_FORCE_MAP[x];
+        return x * 0.95;
+      }
+      return x;
+    }
+
+    function calcSingleDong(x) {
+      if (x > 0) return calcSingleForce(x) - 100;
+      return x + 100;
+    }
+
+    function calcFloat(s, ratio) {
+      const P = s.pingLi;
+      const d = s.sheng - s.ri;
+      const f = s.f;
+      const P_up = P + Math.abs(P) * ratio;
+      const P_down = P - Math.abs(P) * ratio;
+      let x_up = 0;
+      if (d + 1 !== 0) x_up = (P_up * Math.abs(d + 1) - f) / 0.95;
+      let x_down = 0;
+      if (d - 1 !== 0) x_down = -(f - P_down * Math.abs(d - 1));
+      let winP_up = 0, loseP_up = 0;
+      const absUp = Math.abs(x_up);
+      if (absUp !== 0) {
+        if (d + 1 !== 0) winP_up = (f + absUp * 0.95) / Math.abs(d + 1);
+        if (d - 1 !== 0) loseP_up = (f - absUp) / Math.abs(d - 1);
+      }
+      let winP_down = 0, loseP_down = 0;
+      const absDown = Math.abs(x_down);
+      if (absDown !== 0) {
+        if (d + 1 !== 0) winP_down = (f + absDown * 0.95) / Math.abs(d + 1);
+        if (d - 1 !== 0) loseP_down = (f - absDown) / Math.abs(d - 1);
+      }
+      return { x_up, x_down, winP_up, loseP_up, winP_down, loseP_down };
+    }
+
+    function hasBaseData() {
+      const b = baseState;
+      return b.sheng !== 0 || b.ri !== 0 || b.f !== 0 || b.tf !== 0 || b.fan !== 0 || b.dong !== 0
+        || b.maxZuiLi !== 0 || b.minZuiPa !== 0
+        || b.dangSheng !== 0 || b.dangRi !== 0
+        || b.daSheng !== 0 || b.daRi !== 0
+        || b.maxShengDuo !== 0 || b.maxRiDuo !== 0;
+    }
+
+    function applyInputToState(st, x) {
+      if (x > 0) {
+        st.sheng++;
+        if (st.lastSign === 1) st.dangSheng++; else st.dangSheng = 1;
+        st.dangRi = 0;
+        st.lastSign = 1;
+      } else {
+        st.ri++;
+        if (st.lastSign === -1) st.dangRi++; else st.dangRi = 1;
+        st.dangSheng = 0;
+        st.lastSign = -1;
+      }
+      st.f += calcSingleForce(x);
+      st.fan += Math.abs(x);
+      st.dong += calcSingleDong(x);
+      if (st.dangSheng > st.daSheng) st.daSheng = st.dangSheng;
+      if (st.dangRi > st.daRi) st.daRi = st.dangRi;
+      const diff = st.sheng - st.ri;
+      if (diff > st.maxShengDuo) st.maxShengDuo = diff;
+      if (-diff > st.maxRiDuo) st.maxRiDuo = -diff;
+      if (diff === 0) { st.tf += st.f; st.f = 0; }
+      const sumFT = st.f + st.tf;
+      if (sumFT > st.maxZuiLi) st.maxZuiLi = sumFT;
+      if (sumFT < st.minZuiPa) st.minZuiPa = sumFT;
+    }
+
+    function calcState(seq) {
+      const b = baseState;
+      const list = seq || [];
+      const from = Math.min(b._frozenAt || 0, list.length);
+
+      if (b._freeze && from >= list.length) {
+        return {
+          ma: b.ma || 0, longxia: b.longxia || 0, yingSheng: b.yingSheng || 0,
+          f: b.f || 0, pingLi: b.pingLi || 0, tf: b.tf || 0,
+          shengPct: b.shengPct || 0, sheng: b.sheng || 0, ri: b.ri || 0,
+          dangSheng: b.dangSheng || 0, dangRi: b.dangRi || 0,
+          daSheng: b.daSheng || 0, daRi: b.daRi || 0,
+          maxShengDuo: b.maxShengDuo || 0, maxRiDuo: b.maxRiDuo || 0,
+          maxZuiLi: b.maxZuiLi || 0, minZuiPa: b.minZuiPa || 0,
+          fan: b.fan || 0, dong: b.dong || 0,
+          maPing: b.maPing || 0, zhongLi: b.zhongLi || 0, zhongPingLi: b.zhongPingLi || 0
+        };
+      }
+
+      const baseHas = b._freeze || hasBaseData();
+      const st = {
+        sheng: b.sheng || 0, ri: b.ri || 0,
+        dangSheng: b.dangSheng || 0, dangRi: b.dangRi || 0,
+        daSheng: b.daSheng || 0, daRi: b.daRi || 0,
+        maxShengDuo: b.maxShengDuo || 0, maxRiDuo: b.maxRiDuo || 0,
+        f: b.f || 0, tf: b.tf || 0, fan: b.fan || 0, dong: b.dong || 0,
+        lastSign: b.lastSign || 0,
+        maxZuiLi: baseHas ? (b.maxZuiLi || 0) : -Infinity,
+        minZuiPa: baseHas ? (b.minZuiPa || 0) : Infinity
+      };
+
+      for (let i = from; i < list.length; i++) {
+        applyInputToState(st, list[i]);
+      }
+
+      const ma = st.sheng + st.ri;
+      const longxia = st.sheng - st.ri;
+      const shengPct = ma === 0 ? 0 : (st.sheng / ma) * 100;
+      const yingSheng = ma * 0.0136;
+      const pingLi = longxia === 0 ? 0 : st.f / Math.abs(longxia);
+      const maPing = ma === 0 ? 0 : (st.f + st.tf) / ma;
+      const zhongLi = st.f + st.tf;
+      const zhongPingLi = longxia === 0 ? 0 : zhongLi / Math.abs(longxia);
+
+      return {
+        ma, longxia, yingSheng, f: st.f, pingLi, tf: st.tf, shengPct,
+        sheng: st.sheng, ri: st.ri,
+        dangSheng: st.dangSheng, dangRi: st.dangRi,
+        daSheng: st.daSheng, daRi: st.daRi,
+        maxShengDuo: st.maxShengDuo, maxRiDuo: st.maxRiDuo,
+        maxZuiLi: (st.maxZuiLi === -Infinity || st.maxZuiLi === Infinity) ? 0 : st.maxZuiLi,
+        minZuiPa: (st.minZuiPa === -Infinity || st.minZuiPa === Infinity) ? 0 : st.minZuiPa,
+        fan: st.fan, dong: st.dong, maPing, zhongLi, zhongPingLi
+      };
+    }
+
+    function getTianState(seq, s) {
+      const list = seq || [];
+      const start = Math.min(tianStartIndex, list.length);
+      const tianSeq = list.slice(start);
+
+      let mainLongxia = 0;
+      if (start === 0) {
+          const initial = calcState([]);
+          mainLongxia = initial.longxia;
+      } else {
+          const partial = list.slice(0, start);
+          mainLongxia = calcState(partial).longxia;
+      }
+
+      let tSheng = 0, tRi = 0, tF = 0, tTf = 0, tFan = 0;
+      
+      for (let x of tianSeq) {
+        if (x > 0) { tSheng++; mainLongxia++; } 
+        else { tRi++; mainLongxia--; }
+        
+        tF += calcSingleForce(x);
+        tFan += Math.abs(x);
+        
+        if (mainLongxia === 0) {
+            tTf += tF;
+            tF = 0;
+        }
+      }
+      
+      const tMa = tSheng + tRi;
+      const tYingSheng = tMa * 0.0136;
+      const tZhongLi = tF + tTf;
+      const tShengPct = tMa === 0 ? 0 : (tSheng / tMa) * 100;
+      
+      const tUm = calcUnmatchedFrom([], 0, tianSeq);
+      const tStrength = tUm.strength;
+
+      const mainLongxiaFinal = s.longxia;
+
+      let tF1 = baseState.tianF1 || 0;
+      for (let x of tianSeq) {
+          tF1 += calcSingleForce(x);
+      }
+      const tianF1 = tF1;
+      const tianPingLi1 = mainLongxiaFinal === 0 ? 0 : tianF1 / Math.abs(mainLongxiaFinal);
+
+      return {
+        tianMa: tMa,
+        tianFan: tFan,
+        tianMaPing: tMa === 0 ? 0 : tZhongLi / tMa,
+        tianYingSheng: tYingSheng,
+        tianLongxia: tSheng - tRi,
+        tianF: tF,
+        tianPingLi: mainLongxiaFinal === 0 ? 0 : tF / Math.abs(mainLongxiaFinal),
+        tianTf: tTf,
+        tianStrength: tStrength,
+        tianZhongLi: tZhongLi,
+        tianZhongPingLi: mainLongxiaFinal === 0 ? 0 : tZhongLi / Math.abs(mainLongxiaFinal),
+        tianSheng: tSheng,
+        tianRi: tRi,
+        tianShengPct: tShengPct,
+        tianF1: tianF1,
+        tianPingLi1: tianPingLi1
+      };
+    }
+
+    function formatOutput(s, strength, posCount, negCount, tianData) {
+      const longxiaStr = s.longxia > 0 ? `+${s.longxia}` : String(s.longxia);
+      const shengDuoStr = s.maxShengDuo > 0 ? `+${s.maxShengDuo}` : `+0`;
+      const riDuoStr = s.maxRiDuo > 0 ? `-${s.maxRiDuo}` : `-0`;
+      const dangRiStr = s.dangRi > 0 ? `-${s.dangRi}` : `-0`;
+      const daRiStr = s.daRi > 0 ? `-${s.daRi}` : `-0`;
+      
+      const t = tianData || { tianMa:0, tianFan:0, tianMaPing:0, tianYingSheng:0, tianLongxia:0, tianF:0, tianPingLi:0, tianTf:0, tianStrength:0, tianZhongLi:0, tianZhongPingLi:0, tianSheng:0, tianRi:0, tianShengPct:0, tianF1:0, tianPingLi1:0 };
+      const tRiStr = t.tianRi > 0 ? `-${t.tianRi}` : `-0`;
+
+      let tianMaDisplay = `${t.tianMa}`;
+      if (tianClearMark > 0) {
+          tianMaDisplay = `${t.tianMa}(${tianClearMark})`;
+      }
+
+      let diffDao = s.zhongLi - s.ma;
+      let dao = s.longxia === 0 ? 0 : Math.sign(diffDao) * Math.abs(diffDao / s.longxia);
+      
+      let diffTianDao = t.tianZhongLi - t.tianMa;
+      let tianDao = t.tianLongxia === 0 ? 0 : Math.sign(diffTianDao) * Math.abs(diffTianDao / t.tianLongxia);
+
+      return `马：${s.ma} 马平：${fmtNum(s.maPing, 2)} 天马：${tianMaDisplay}
+道：${fmtNum(dao, 2)} 天道：${fmtNum(tianDao, 2)}
+龙虾：${longxiaStr} 应生：${fmtNum(s.yingSheng, 1)} 圣：${fmtSheng(s.shengPct)}
+力：${fmtNum(s.f, 2)} 平力：${fmtNum(s.pingLi, 1)}
+总力：${fmtNum(s.tf, 2)} 实力：${fmtNum(strength || 0, 2)}
+终力：${fmtNum(s.zhongLi, 1)} 终平力：${fmtNum(s.zhongPingLi, 2)}
+天龙：${t.tianLongxia} 天应生：${fmtNum(t.tianYingSheng, 1)} 天圣：${fmtSheng(t.tianShengPct)}
+天力：${fmtNum(t.tianF, 2)} 天平力：${fmtNum(t.tianPingLi, 1)}
+天力1：${fmtNum(t.tianF1, 2)} 天平力1：${fmtNum(t.tianPingLi1, 1)}
+天总力：${fmtNum(t.tianTf, 2)} 天实力：${fmtNum(t.tianStrength, 2)}
+天终力：${fmtNum(t.tianZhongLi, 1)} 天终平力：${fmtNum(t.tianZhongPingLi, 2)}
+大生：${s.daSheng} 大日：${daRiStr} 当生：${s.dangSheng} 当日：${dangRiStr}
+最力：${fmtNum(s.maxZuiLi, 2)} 最趴：${fmtNum(s.minZuiPa, 2)}
+生：${s.sheng} 日：-${s.ri} 天生：${t.tianSheng} 天日：${tRiStr}
+生多：${shengDuoStr} 日多：${riDuoStr} 天马平：${fmtNum(t.tianMaPing, 2)}
+饭：${fmtNum(s.fan, 2)} 洞：${fmtNum(s.dong, 2)} 天饭：${fmtNum(t.tianFan, 2)}`;
+    }
+
+    function colorizeNumbers(text) {
+      return text.replace(/(-?\d+(?:\.\d+)?)/g, (m, ns) => {
+        const n = parseFloat(ns);
+        if (ns.charAt(0) === '-' || n < 0) return `<span class="num-neg">${ns}</span>`;
+        return `<span class="num-zero">${ns}</span>`;
+      });
+    }
+
+    function renderText(text) {
+      let result = text.replace(/^(10%：.*)$/m, (m, line) => {
+        const idx = line.indexOf('：');
+        const prefix = line.slice(0, idx + 1);
+        const content = line.slice(idx + 1);
+        return prefix + colorizeNumbers(content);
+      });
+
+      return result.replace(/([^\s：]+)：([+\-]?\d+(?:\.\d+)?)/g, (m, label, val) => {
+        const num = parseFloat(val);
+        let cls = "num-zero";
+        if (label === "马" || label === "饭" || label === "天马" || label === "天饭") cls = "num-zero";
+        else if ((label === "圣" || label === "天圣") && num > 0 && num < 45) cls = "num-neg";
+        else if (num > 0) cls = "num-pos";
+        else if (num < 0) cls = "num-neg";
+        if (label === "龙虾" || label === "天龙" || label.includes("平力") || label.includes("终力")) cls += " num-big";
+        
+        let labelHtml = `${label}：`;
+        if (label === "天平力" || label === "天终力" || label === "天终平力") {
+            labelHtml = `<span style="color: var(--fuchsia); font-weight: 700;">${label}：</span>`;
+        } else if (label === "天力1" || label === "天平力1") {
+            labelHtml = `<span style="color: var(--cyan); font-weight: 700;">${label}：</span>`;
+        } else if (label === "道" || label === "天道") {
+            labelHtml = `<span style="color: var(--yellow); font-weight: 700;">${label}：</span>`;
+        } else if (label.includes("平力") || label.includes("终力")) {
+            labelHtml = `<span style="color: var(--orange);">${label}：</span>`;
+        }
+        
+        return `${labelHtml}<span class="${cls}">${val}</span>`;
+      });
+    }
+
+    function injectPreview(html) {
+      if (!previewData) return html;
+      const previewLine =
+        `<span class="preview-pingli">预平力：` +
+        `<span class="preview-win">${previewData.win}</span>` +
+        `/` +
+        `<span class="preview-lose">${previewData.lose}</span>` +
+        `</span>`;
+      const zhongLine =
+        `<span class="preview-pingli">终预平力：` +
+        `<span class="preview-win">${previewData.zhongWin}</span>` +
+        `/` +
+        `<span class="preview-lose">${previewData.zhongLose}</span>` +
+        `</span>`;
+
+      const lines = html.split('\n');
+      const result = [];
+      for (const line of lines) {
+        result.push(line);
+        if (line.startsWith('力：')) {
+          result.push(previewLine);
+          result.push(zhongLine);
+        }
+      }
+      return result.join('\n');
+    }
+
+    // ========== 未抵消核心计算 ==========
+    function calcUnmatchedFrom(initialItems, initialStrength, seq) {
+      const unmatched = [];
+      for (const it of (initialItems || [])) {
+        if (!it) continue;
+        const f = (typeof it.force === "number") ? it.force : calcSingleForce(it.orig);
+        unmatched.push({ force: f, orig: it.orig });
+      }
+      let strength = initialStrength || 0;
+
+      for (let x of (seq || [])) {
+        const fx = calcSingleForce(x);
+
+        if (x > 0) {
+          let bestIdx = -1;
+          let bestAbs = -1;
+          for (let i = 0; i < unmatched.length; i++) {
+            const it = unmatched[i];
+            if (it.force < 0) {
+              const absN = Math.abs(it.force);
+              if (absN < fx && absN > bestAbs) {
+                bestAbs = absN;
+                bestIdx = i;
+              }
+            }
+          }
+          if (bestIdx !== -1) {
+            strength += fx - bestAbs;
+            unmatched.splice(bestIdx, 1);
+          } else {
+            unmatched.push({ force: fx, orig: x });
+          }
+        } else {
+          const absFx = Math.abs(fx);
+          let bestIdx = -1;
+          let bestForce = Infinity;
+          for (let i = 0; i < unmatched.length; i++) {
+            const it = unmatched[i];
+            if (it.force > 0 && it.force > absFx && it.force < bestForce) {
+              bestForce = it.force;
+              bestIdx = i;
+            }
+          }
+          if (bestIdx !== -1) {
+            strength += bestForce - absFx;
+            unmatched.splice(bestIdx, 1);
+          } else {
+            unmatched.push({ force: fx, orig: x });
+          }
+        }
+      }
+
+      let changed = true;
+      while (changed) {
+        changed = false;
+        let bestI = -1, bestJ = -1, bestDiff = Infinity;
+        for (let i = 0; i < unmatched.length; i++) {
+          const a = unmatched[i];
+          if (a.force <= 0) continue;
+          for (let j = 0; j < unmatched.length; j++) {
+            if (j === i) continue;
+            const b = unmatched[j];
+            if (b.force >= 0) continue;
+            const diff = a.force - Math.abs(b.force);
+            if (diff > 0 && diff < bestDiff) {
+              bestDiff = diff;
+              bestI = i;
+              bestJ = j;
+            }
+          }
+        }
+        if (bestI !== -1) {
+          strength += bestDiff;
+          const idx1 = Math.max(bestI, bestJ);
+          const idx2 = Math.min(bestI, bestJ);
+          unmatched.splice(idx1, 1);
+          unmatched.splice(idx2, 1);
+          changed = true;
+        }
+      }
+
+      let posCount = unmatched.filter(x => x.orig > 0).length;
+      let negCount = unmatched.filter(x => x.orig < 0).length;
+      return { unmatched, strength, posCount, negCount };
+    }
+
+    function calcUnmatched(seq) {
+      const list = seq || [];
+      if (unmatchedOverride) {
+        const from = Math.min(baseState._frozenAt || 0, list.length);
+        return calcUnmatchedFrom(unmatchedOverride.items, unmatchedOverride.strength, list.slice(from));
+      }
+      return calcUnmatchedFrom([], 0, list);
+    }
+
+    function getUnmatchedData() {
+      return calcUnmatched(inputs);
+    }
+
+    function calcUnmatchedStats(unmatched, strength) {
+      const arr = unmatched || [];
+      let posCount = 0;
+      let negCount = 0;
+      let negOrigSum = 0;
+      for (const item of arr) {
+        if (item.orig > 0) posCount++;
+        else if (item.orig < 0) { negCount++; negOrigSum += item.orig; }
+      }
+      const negSum = negOrigSum + (strength || 0);
+      const avg = negCount > 0 ? negSum / negCount : 0;
+      return { posCount, negCount, negSum, avg };
+    }
+
+    function sortUnmatchedForDisplay(unmatched) {
+      const arr = (unmatched || []).slice();
+      arr.sort((a, b) => {
+        const aPos = a.orig > 0;
+        const bPos = b.orig > 0;
+        if (aPos !== bPos) return aPos ? -1 : 1;
+        if (aPos) return a.orig - b.orig;
+        return b.orig - a.orig;
+      });
+      return arr;
+    }
+
+    function sortOrigsForDisplay(arr) {
+      const a = (arr || []).slice();
+      a.sort((x, y) => {
+        const xp = x > 0, yp = y > 0;
+        if (xp !== yp) return xp ? -1 : 1;
+        if (xp) return x - y;
+        return y - x;
+      });
+      return a;
+    }
+
+    function updateUnmatchedArea(unmatched, strength) {
+      const el = document.getElementById("unmatchedList");
+      if (!el) return;
+      if (!unmatched || unmatched.length === 0) {
+        el.innerHTML = '<span class="unmatched-empty">全部抵消完成</span>';
+      } else {
+        const sorted = sortUnmatchedForDisplay(unmatched);
+        el.innerHTML = sorted.map(item => {
+          const cls = item.orig > 0 ? "num-pos" : "num-neg";
+          return `<span class="${cls}">${fmtNum(item.orig)}</span>`;
+        }).join("");
+      }
+      updateUnmatchedStats(unmatched, strength);
+    }
+
+    function updateUnmatchedStats(unmatched, strength) {
+      const el = document.getElementById("unmatchedStats");
+      if (!el) return;
+      const { posCount, negCount, negSum, avg } = calcUnmatchedStats(unmatched || [], strength);
+      const negSumCls = negSum > 0 ? "num-pos" : (negSum < 0 ? "num-neg" : "num-zero");
+      const avgCls = avg > 0 ? "num-pos" : (avg < 0 ? "num-neg" : "num-zero");
+      el.innerHTML =
+        `<span class="stats-item"><span class="num-pos">+${posCount}</span><span class="stats-sep">/</span><span class="num-neg">-${negCount}</span></span>` +
+        `<span class="stats-item ${negSumCls}">${fmtNum(negSum)}</span>` +
+        `<span class="stats-item ${avgCls}">${fmtNum(avg, 2)}</span>`;
+    }
+
+    // ========== 未抵消预览 ==========
+    function refreshUnmatchedPreview() {
+      const previewEl = document.getElementById("unmatchedPreview");
+      const zoomGroup = document.getElementById("unmatchedZoomGroup");
+      if (!previewEl || !zoomGroup) return;
+
+      const raw = (numInput.value || "").trim();
+      let shown = false;
+
+      if (raw && raw !== "5" && raw !== "6") {
+        const x = parseFloat(raw);
+        if (!isNaN(x) && x !== 0) {
+          const a = Math.abs(x);
+          const winRes = calcUnmatched(inputs.concat([a]));
+          const loseRes = calcUnmatched(inputs.concat([-a]));
+          const winStats = calcUnmatchedStats(winRes.unmatched, winRes.strength);
+          const loseStats = calcUnmatchedStats(loseRes.unmatched, loseRes.strength);
+          const clsOf = (n) => n > 0 ? "num-pos" : (n < 0 ? "num-neg" : "num-zero");
+          previewEl.innerHTML =
+            `<div class="preview-row win-row">` +
+              `<span class="${clsOf(winStats.negSum)}">${fmtNum(winStats.negSum)}</span>` +
+              `<span class="preview-sep">/</span>` +
+              `<span class="${clsOf(winStats.avg)}">${fmtNum(winStats.avg, 2)}</span>` +
+            `</div>` +
+            `<div class="preview-row lose-row">` +
+              `<span class="${clsOf(loseStats.negSum)}">${fmtNum(loseStats.negSum)}</span>` +
+              `<span class="preview-sep">/</span>` +
+              `<span class="${clsOf(loseStats.avg)}">${fmtNum(loseStats.avg, 2)}</span>` +
+            `</div>`;
+          shown = true;
+        }
+      }
+
+      if (shown) {
+        previewEl.classList.add("show");
+        zoomGroup.style.display = "none";
+      } else {
+        previewEl.classList.remove("show");
+        zoomGroup.style.display = "flex";
+      }
+    }
+
+    // ========== 渲染 ==========
+    function renderRecent() {
+      const el = document.getElementById("recentList");
+      if (inputs.length === 0) {
+        el.innerHTML = '<span class="empty">暂无记录</span>';
+        return;
+      }
+      const recent = inputs.slice(-RECENT_LIMIT);
+      el.innerHTML = recent.map(x => x > 0 ? '<span class="win">1</span>' : '<span class="lose">2</span>').join("");
+    }
+
+    let detailLock = false;
+
+    // 核心：计算天明细，并同步到永久归档 detailTianArchive
+    function updateTianDetailData() {
+        tianDetailData = [];
+        if (inputs.length === 0) return;
+
+        let mainLongxia = 0;
+        let start = Math.min(tianStartIndex, inputs.length);
+        if (start === 0) {
+            mainLongxia = calcState([]).longxia;
+        } else {
+            mainLongxia = calcState(inputs.slice(0, start)).longxia;
+        }
+
+        let tSheng = 0, tRi = 0, tF = 0, tTf = 0;
+
+        for (let i = 0; i < inputs.length; i++) {
+            const x = inputs[i];
+            if (i < start) {
+                // 天清零前的记录：优先使用永久归档
+                let item = detailTianArchive[i] || null;
+                if (!item) {
+                    // 归档没有则从快照补全（兼容老数据 / 首次升级）
+                    for (let k = tianSnapshots.length - 1; k >= 0; k--) {
+                        const snap = tianSnapshots[k];
+                        if (snap && Array.isArray(snap.details) && i < snap.details.length && snap.details[i]) {
+                            item = { longxia: snap.details[i].longxia, zhongLi: snap.details[i].zhongLi };
+                            break;
+                        }
+                    }
+                    if (item) {
+                        while (detailTianArchive.length <= i) detailTianArchive.push(null);
+                        detailTianArchive[i] = item;
+                    }
+                }
+                tianDetailData.push(item);
+            } else {
+                if (x > 0) { tSheng++; mainLongxia++; }
+                else { tRi++; mainLongxia--; }
+
+                tF += calcSingleForce(x);
+                if (mainLongxia === 0) { tTf += tF; tF = 0; }
+
+                const item = {
+                    longxia: tSheng - tRi,
+                    zhongLi: tF + tTf
+                };
+                tianDetailData.push(item);
+                // 永久归档
+                while (detailTianArchive.length <= i) detailTianArchive.push(null);
+                detailTianArchive[i] = item;
+            }
+        }
+    }
+
+    function getFullTianDetailRow(idx) {
+      if (tianDetailData.length > idx && tianDetailData[idx]) {
+        return tianDetailData[idx];
+      }
+      if (detailTianArchive.length > idx && detailTianArchive[idx]) {
+        return detailTianArchive[idx];
+      }
+      return null;
+    }
+
+    function renderDetailRows() {
+      const el = document.getElementById("recentDetail");
+      if (!el) return;
+      const total = inputs.length;
+      if (total === 0) {
+        el.innerHTML = '<div class="detail-empty">暂无记录</div>';
+        return;
+      }
+      const viewH = el.clientHeight || 220;
+      const st = el.scrollTop;
+      let start = Math.floor(st / DETAIL_ROW_H) - 2;
+      if (start < 0) start = 0;
+      let end = Math.ceil((st + viewH) / DETAIL_ROW_H) + 2;
+      if (end > total) end = total;
+      let html = "";
+      if (start > 0) html += `<div style="height:${start * DETAIL_ROW_H}px"></div>`;
+      for (let i = start; i < end; i++) {
+        const idx = total - 1 - i;
+        const x = inputs[idx];
+        const f = calcSingleForce(x);
+        const sign = x > 0 ? "+" : "-";
+        const cls = x > 0 ? "pos" : "neg";
+        const isZeroLx = (lxHistory.length > idx && lxHistory[idx] === 0);
+        const rowCls = isZeroLx ? "detail-row zero-lx-line" : "detail-row";
+
+        const td = getFullTianDetailRow(idx);
+
+        let tlText = '-';
+        let tlCls = '';
+        let tzText = '-';
+        let tzCls = '';
+        if (td) {
+          tlText = fmtNum(td.longxia);
+          if (td.longxia > 0) tlCls = 'pos';
+          else if (td.longxia < 0) tlCls = 'neg';
+
+          tzText = fmtNum(td.zhongLi);
+          if (td.zhongLi > 0) tzCls = 'pos';
+          else if (td.zhongLi < 0) tzCls = 'neg';
+        }
+
+        // 天终力在前，天龙在后
+        html += `<div class="${rowCls}">
+          <span class="d-idx">${idx + 1}</span>
+          <span class="d-tz ${tzCls}">${tzText}</span>
+          <span class="d-tl ${tlCls}">${tlText}</span>
+          <span class="d-in ${cls}">${fmtNum(x)}</span>
+          <span class="d-f ${cls}">${fmtNum(f, 2)}</span>
+          <span class="d-sign ${cls}">${sign}</span>
+        </div>`;
+      }
+      if (end < total) html += `<div style="height:${(total - end) * DETAIL_ROW_H}px"></div>`;
+      detailLock = true;
+      el.innerHTML = html;
+      if (el.scrollTop !== st) el.scrollTop = st;
+      detailLock = false;
+    }
+
+    function renderRecentDetail() {
+      const el = document.getElementById("recentDetail");
+      if (!el) return;
+      el.scrollTop = 0;
+      renderDetailRows();
+    }
+
+    function renderOutput(text, checkHtml = "") {
+      document.getElementById("output").innerHTML = injectPreview(renderText(text));
+      document.getElementById("checkArea").innerHTML = checkHtml;
+      lxHistory = [];
+      let curLx = baseState.sheng - baseState.ri;
+      for (let x of inputs) {
+        if (x > 0) curLx++; else curLx--;
+        lxHistory.push(curLx);
+      }
+      updateTianDetailData();
+      renderRecent();
+      renderRecentDetail();
+      renderChart();
+      const st = calcState(inputs);
+      updateFloatArea(st);
+      const um = getUnmatchedData();
+      updateUnmatchedArea(um.unmatched, um.strength);
+      refreshUnmatchedPreview();
+    }
+
+    function refreshOutputOnly() {
+      const st = calcState(inputs);
+      const um = getUnmatchedData();
+      const tianData = getTianState(inputs, st);
+      const text = formatOutput(st, um.strength, um.posCount, um.negCount, tianData);
+      document.getElementById("output").innerHTML = injectPreview(renderText(text));
+      updateTianDetailData();
+      renderChart();
+      updateFloatArea(st);
+      updateUnmatchedArea(um.unmatched, um.strength);
+    }
+
+    function save() {
+      const data = {
+        inputs, outputHistory, baseState, chartZoom, unmatchedZoom,
+        unmatchedOverride, tianStartIndex, tianClearMark,
+        tianSnapshots,
+        detailTianArchive,
+        version: 5,
+        savedAt: new Date().toISOString()
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+    }
+
+    function normalizeTianSnapshots(raw) {
+      if (!Array.isArray(raw)) return [];
+      const list = [];
+      for (const s of raw) {
+        if (!s || typeof s !== 'object') continue;
+        if (!Array.isArray(s.details)) continue;
+        const details = s.details.map(d => {
+          if (!d || typeof d !== 'object') return null;
+          if (typeof d.longxia !== 'number' || typeof d.zhongLi !== 'number') return null;
+          return { longxia: d.longxia, zhongLi: d.zhongLi };
+        });
+        list.push({
+          id: (typeof s.id === 'string' && s.id) ? s.id : ('ts_' + Math.random().toString(36).slice(2, 10)),
+          savedAt: (typeof s.savedAt === 'string' && s.savedAt) ? s.savedAt : new Date().toISOString(),
+          tianStartIndex: (typeof s.tianStartIndex === 'number' && isFinite(s.tianStartIndex)) ? s.tianStartIndex : 0,
+          tianClearMark: (typeof s.tianClearMark === 'number' && isFinite(s.tianClearMark)) ? s.tianClearMark : 0,
+          tianF1: (typeof s.tianF1 === 'number' && isFinite(s.tianF1)) ? s.tianF1 : 0,
+          inputsLength: (typeof s.inputsLength === 'number' && isFinite(s.inputsLength)) ? s.inputsLength : details.length,
+          details
+        });
+      }
+      return list;
+    }
+
+    function normalizeTianArchive(raw, len) {
+      if (!Array.isArray(raw)) return [];
+      const arr = [];
+      for (let i = 0; i < raw.length; i++) {
+        const d = raw[i];
+        if (!d || typeof d !== 'object') { arr.push(null); continue; }
+        if (typeof d.longxia !== 'number' || typeof d.zhongLi !== 'number') { arr.push(null); continue; }
+        arr.push({ longxia: d.longxia, zhongLi: d.zhongLi });
+      }
+      return arr;
+    }
+
+    function load() {
+      try {
+        let raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) raw = localStorage.getItem("shengri_app_v4");
+        if (!raw) raw = localStorage.getItem("shengri_app_v3");
+        if (!raw) raw = localStorage.getItem("shengri_app_v2");
+        if (!raw) raw = localStorage.getItem("shengri_app_v1");
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data && Array.isArray(data.inputs)) {
+          inputs = data.inputs;
+          outputHistory = data.outputHistory || [];
+          if (typeof data.chartZoom === "number" && isFinite(data.chartZoom)) {
+            chartZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, data.chartZoom));
+          }
+          if (typeof data.unmatchedZoom === "number" && isFinite(data.unmatchedZoom)) {
+            unmatchedZoom = Math.max(UNMATCHED_ZOOM_MIN, Math.min(UNMATCHED_ZOOM_MAX, data.unmatchedZoom));
+          }
+          if (typeof data.tianStartIndex === "number" && isFinite(data.tianStartIndex)) {
+            tianStartIndex = data.tianStartIndex;
+          } else {
+            tianStartIndex = 0;
+          }
+          if (typeof data.tianClearMark === "number" && isFinite(data.tianClearMark)) {
+            tianClearMark = data.tianClearMark;
+          } else {
+            tianClearMark = 0;
+          }
+          tianSnapshots = normalizeTianSnapshots(data.tianSnapshots);
+          detailTianArchive = normalizeTianArchive(data.detailTianArchive, inputs.length);
+          if (data.baseState && typeof data.baseState === "object") {
+            baseState = Object.assign({
+              sheng: 0, ri: 0, dangSheng: 0, dangRi: 0,
+              daSheng: 0, daRi: 0, maxShengDuo: 0, maxRiDuo: 0,
+              f: 0, tf: 0, fan: 0, dong: 0, lastSign: 0,
+              maxZuiLi: 0, minZuiPa: 0, _freeze: false, _frozenAt: 0,
+              ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+              shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0,
+              tianF1: 0
+            }, data.baseState);
+            if (typeof baseState._frozenAt !== "number") baseState._frozenAt = 0;
+          }
+          if (data.unmatchedOverride && Array.isArray(data.unmatchedOverride.items)) {
+            unmatchedOverride = {
+              items: data.unmatchedOverride.items
+                .filter(it => it && typeof it.orig === "number" && it.orig !== 0)
+                .map(it => ({ orig: it.orig })),
+              strength: typeof data.unmatchedOverride.strength === "number"
+                ? data.unmatchedOverride.strength : 0
+            };
+          } else {
+            unmatchedOverride = null;
+          }
+          rebuild();
+        }
+      } catch (e) {}
+    }
+
+    function rebuild() {
+      outputHistory = [];
+      for (let i = 0; i < inputs.length; i++) {
+        const partial = inputs.slice(0, i + 1);
+        const st = calcState(partial);
+        const um = calcUnmatched(partial);
+        const t = getTianState(partial, st);
+        outputHistory.push(formatOutput(st, um.strength, um.posCount, um.negCount, t));
+      }
+      const st = calcState(inputs);
+      const um = getUnmatchedData();
+      const t = getTianState(inputs, st);
+      renderOutput(formatOutput(st, um.strength, um.posCount, um.negCount, t));
+      save();
+    }
+
+    function toast(msg, isWarn = false) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.remove("bubble", "warn-big");
+      el.style.color = "";
+      el.style.fontSize = "";
+      el.classList.add("show");
+      if (isWarn) { el.style.color = "#eab308"; el.style.fontSize = "12px"; }
+      else { el.style.color = "#fff"; el.style.fontSize = "14px"; }
+      if (el.timer) clearTimeout(el.timer);
+      el.timer = setTimeout(() => { el.classList.remove("show"); }, 1800);
+    }
+
+    function warnBigToast(msg, duration = 2000) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.remove("bubble");
+      el.classList.add("show", "warn-big");
+      el.style.color = ""; el.style.fontSize = "";
+      el.style.padding = ""; el.style.borderColor = ""; el.style.background = ""; el.style.boxShadow = "";
+      if (el.timer) clearTimeout(el.timer);
+      el.timer = setTimeout(() => { el.classList.remove("show", "warn-big"); }, duration);
+    }
+
+    function bubbleToast(html, duration) {
+      const el = document.getElementById("toast");
+      el.innerHTML = html;
+      el.style.color = ""; el.style.fontSize = "";
+      el.classList.remove("warn-big");
+      el.classList.add("show", "bubble");
+      if (el.timer) clearTimeout(el.timer);
+      el.timer = setTimeout(() => { el.classList.remove("show", "bubble"); }, duration);
+    }
+
+    function flashYellowGlow(duration = 2000) {
+      const glow = document.getElementById("screenGlow");
+      if (!glow) return;
+      glow.className = "screen-glow";
+      void glow.offsetWidth;
+      glow.classList.add("yellow");
+      if (glow.timer) clearTimeout(glow.timer);
+      glow.timer = setTimeout(() => {
+        glow.classList.add("fade-out");
+        setTimeout(() => { glow.className = "screen-glow"; }, 500);
+      }, duration);
+    }
+
+    let audioCtx = null;
+    let beepOsc = null;
+    let beepGain = null;
+    function stopBeep() {
+      try {
+        if (beepOsc) { try { beepOsc.stop(); } catch(e) {} try { beepOsc.disconnect(); } catch(e) {} beepOsc = null; }
+        if (beepGain) { try { beepGain.disconnect(); } catch(e) {} beepGain = null; }
+      } catch(e) {}
+    }
+    function playBeep(duration = 2000) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!audioCtx) audioCtx = new AC();
+        if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+        stopBeep();
+        const now = audioCtx.currentTime;
+        const dur = duration / 1000;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(880, now);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
+        gain.gain.setValueAtTime(0.12, Math.max(now + 0.03, now + dur - 0.08));
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(now); osc.stop(now + dur + 0.02);
+        beepOsc = osc; beepGain = gain;
+        osc.onended = () => {
+          if (beepOsc === osc) beepOsc = null;
+          if (beepGain === gain) beepGain = null;
+        };
+      } catch (e) {}
+    }
+
+    function updateFloatArea(s) {
+      const el = document.getElementById("floatArea");
+      if (!el) return;
+      const ratios = [0.05, 0.10, 0.15, 0.20, 0.50];
+      let html = "";
+      for (const r of ratios) {
+        const flt = calcFloat(s, r);
+        const pct = Math.round(r * 100) + "%";
+        const upStr = `${fmtNum(flt.x_up, 2)}(${fmtNum(flt.winP_up, 1)}/${fmtNum(flt.loseP_up, 1)})`;
+        const downStr = `${fmtNum(flt.x_down, 2)}(${fmtNum(flt.winP_down, 1)}/${fmtNum(flt.loseP_down, 1)})`;
+        html += `<div class="float-row">${colorizeNumbers(`${pct}：${upStr},${downStr}`)}</div>`;
+      }
+      el.innerHTML = html;
+    }
+
+    // ========== 曲线 ==========
+    function computeSumFTSeries() {
+      const series = [];
+      let sheng = 0, ri = 0, f = 0, tf = 0;
+      
+      for (let i = 0; i < inputs.length; i++) {
+        const x = inputs[i];
+        if (x > 0) sheng++; else ri++;
+        f += calcSingleForce(x);
+        if (sheng - ri === 0) { tf += f; f = 0; }
+        series.push(f + tf);
+      }
+
+      if (series.length > 0) {
+        const st = calcState(inputs);
+        series[series.length - 1] = st.f + st.tf;
+      }
+      return series;
+    }
+
+    function computeLongxiaSeries() {
+      const series = [];
+      let sheng = 0, ri = 0;
+      
+      for (let i = 0; i < inputs.length; i++) {
+        const x = inputs[i];
+        if (x > 0) sheng++; else ri++;
+        series.push(sheng - ri);
+      }
+
+      if (series.length > 0) {
+        const st = calcState(inputs);
+        series[series.length - 1] = st.longxia;
+      }
+      return series;
+    }
+
+    function computeTianSumFTSeries() {
+      const series = [];
+      const start = Math.min(tianStartIndex, inputs.length);
+      let tSheng = 0, tRi = 0, tF = 0, tTf = 0;
+      
+      let mainLongxia = 0;
+      if (start === 0) {
+          const initial = calcState([]);
+          mainLongxia = initial.longxia;
+      } else {
+          const partial = inputs.slice(0, start);
+          mainLongxia = calcState(partial).longxia;
+      }
+      
+      for (let i = start; i < inputs.length; i++) {
+          const x = inputs[i];
+          if (x > 0) { tSheng++; mainLongxia++; }
+          else { tRi++; mainLongxia--; }
+          
+          tF += calcSingleForce(x);
+          if (mainLongxia === 0) { tTf += tF; tF = 0; }
+          series.push(tF + tTf);
+      }
+      return series;
+    }
+
+    function computeTianLongxiaSeries() {
+      const series = [];
+      const start = Math.min(tianStartIndex, inputs.length);
+      let tSheng = 0, tRi = 0;
+      
+      for (let i = start; i < inputs.length; i++) {
+          const x = inputs[i];
+          if (x > 0) tSheng++; else tRi++;
+          series.push(tSheng - tRi);
+      }
+      return series;
+    }
+
+    function buildPoints(series, plotW, xOf, yOf) {
+      const n = series.length;
+      const pts = [];
+      const maxPts = Math.max(4, Math.floor(plotW));
+      if (n <= maxPts) {
+        for (let i = 0; i < n; i++) pts.push({ x: xOf(i), y: yOf(series[i]), v: series[i] });
+      } else {
+        const buckets = Math.max(2, Math.floor(maxPts / 2));
+        const size = n / buckets;
+        for (let b = 0; b < buckets; b++) {
+          const start = Math.floor(b * size);
+          const end = Math.min(n, Math.floor((b + 1) * size));
+          if (start >= end) continue;
+          let mn = Infinity, mx = -Infinity, mnI = start, mxI = start;
+          for (let i = start; i < end; i++) {
+            const v = series[i];
+            if (v < mn) { mn = v; mnI = i; }
+            if (v > mx) { mx = v; mxI = i; }
+          }
+          if (mnI <= mxI) {
+            pts.push({ x: xOf(mnI), y: yOf(mn), v: mn });
+            pts.push({ x: xOf(mxI), y: yOf(mx), v: mx });
+          } else {
+            pts.push({ x: xOf(mxI), y: yOf(mx), v: mx });
+            pts.push({ x: xOf(mnI), y: yOf(mn), v: mn });
+          }
+        }
+      }
+      return pts;
+    }
+
+    function drawDot(ctx, x, y, color) {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x, y, 2.8, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.65)";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x, y, 4.6, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    function roundRectPath(ctx, x, y, w, h, r) {
+      if (w < 2 * r) r = w / 2;
+      if (h < 2 * r) r = h / 2;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function segmentsIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+      const d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
+      if (Math.abs(d) < 1e-12) return false;
+      const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d;
+      const u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d;
+      return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+    }
+
+    function segIntersectsRect(x1, y1, x2, y2, rx1, ry1, rx2, ry2) {
+      const rxmin = Math.min(rx1, rx2), rxmax = Math.max(rx1, rx2);
+      const rymin = Math.min(ry1, ry2), rymax = Math.max(ry1, ry2);
+      if (x1 < rxmin && x2 < rxmin) return false;
+      if (x1 > rxmax && x2 > rxmax) return false;
+      if (y1 < rymin && y2 < rymin) return false;
+      if (y1 > rymax && y2 > rymax) return false;
+      if (x1 >= rxmin && x1 <= rxmax && y1 >= rymin && y1 <= rymax) return true;
+      if (x2 >= rxmin && x2 <= rxmax && y2 >= rymin && y2 <= rymax) return true;
+      return (
+        segmentsIntersect(x1, y1, x2, y2, rxmin, rymin, rxmax, rymin) ||
+        segmentsIntersect(x1, y1, x2, y2, rxmin, rymax, rxmax, rymax) ||
+        segmentsIntersect(x1, y1, x2, y2, rxmin, rymin, rxmin, rymax) ||
+        segmentsIntersect(x1, y1, x2, y2, rxmax, rymin, rxmax, rymax)
+      );
+    }
+
+    function rectIntersectsCurve(x1, y1, x2, y2, pts, dotR) {
+      for (let i = 0; i < pts.length - 1; i++) {
+        if (segIntersectsRect(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, x1, y1, x2, y2)) return true;
+      }
+      if (pts.length > 0) {
+        const last = pts[pts.length - 1];
+        const cx = Math.max(x1, Math.min(last.x, x2));
+        const cy = Math.max(y1, Math.min(last.y, y2));
+        const dx = last.x - cx, dy = last.y - cy;
+        if (dx * dx + dy * dy < dotR * dotR) return true;
+      }
+      if (pts.length === 1) {
+        const p = pts[0];
+        const cx = Math.max(x1, Math.min(p.x, x2));
+        const cy = Math.max(y1, Math.min(p.y, y2));
+        const dx = p.x - cx, dy = p.y - cy;
+        if (dx * dx + dy * dy < dotR * dotR) return true;
+      }
+      return false;
+    }
+
+    function drawLabelSafely(ctx, anchorX, anchorY, text, color, cssW, cssH, pts, dotR) {
+      ctx.font = "bold 11px 'SF Mono', Menlo, Consolas, monospace";
+      const tw = ctx.measureText(text).width;
+      const th = 12, bgPadX = 3, bgPadY = 2, margin = 1, hGap = 8;
+      const vOffsets = [-10, 10, -20, 20, -32, 32, -45, 45, -58, 58];
+      const candidates = [];
+      for (const vo of vOffsets) candidates.push({ left: anchorX + hGap, top: anchorY + vo - th / 2 });
+      for (const vo of vOffsets) candidates.push({ left: anchorX - hGap - tw, top: anchorY + vo - th / 2 });
+      for (const vo of [-16, -26, -38, -52, -66]) candidates.push({ left: anchorX - tw / 2, top: anchorY + vo - th / 2 });
+      for (const vo of [16, 26, 38, 52, 66]) candidates.push({ left: anchorX - tw / 2, top: anchorY + vo - th / 2 });
+      let best = null;
+      for (const c of candidates) {
+        const bx1 = c.left - bgPadX, by1 = c.top - bgPadY;
+        const bx2 = c.left + tw + bgPadX, by2 = c.top + th + bgPadY;
+        if (bx1 < margin || bx2 > cssW - margin) continue;
+        if (by1 < margin || by2 > cssH - margin) continue;
+        if (!rectIntersectsCurve(bx1, by1, bx2, by2, pts, dotR)) { best = c; break; }
+      }
+      if (!best) return;
+      roundRectPath(ctx, best.left - bgPadX, best.top - bgPadY, tw + bgPadX * 2, th + bgPadY * 2, 3);
+      ctx.fillStyle = "rgba(26,26,26,0.96)";
+      ctx.fill();
+      ctx.fillStyle = color;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(text, best.left, best.top);
+    }
+
+    function drawOneChart(canvas, series) {
+      if (!canvas) return;
+      const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+      if (cssW <= 0 || cssH <= 0) return;
+      const dpr = window.devicePixelRatio || 1;
+      const needW = Math.round(cssW * dpr), needH = Math.round(cssH * dpr);
+      if (canvas.width !== needW || canvas.height !== needH) {
+        canvas.width = needW; canvas.height = needH;
+      }
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cssW, cssH);
+      const n = series.length;
+      let minV = 0, maxV = 0;
+      for (let i = 0; i < n; i++) {
+        const v = series[i];
+        if (v < minV) minV = v;
+        if (v > maxV) maxV = v;
+      }
+      if (minV === maxV) { minV -= 1; maxV += 1; }
+      const pad = (maxV - minV) * 0.14;
+      minV -= pad; maxV += pad;
+      const padL = 4, padR = 4, padT = 8, padB = 8;
+      const plotW = cssW - padL - padR, plotH = cssH - padT - padB;
+      const xOf = i => n <= 1 ? padL + plotW / 2 : padL + (i / (n - 1)) * plotW;
+      const yOf = v => padT + (1 - (v - minV) / (maxV - minV)) * plotH;
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.lineWidth = 1;
+      const y0 = yOf(0);
+      ctx.beginPath();
+      ctx.moveTo(padL, y0);
+      ctx.lineTo(padL + plotW, y0);
+      ctx.stroke();
+      if (n === 0) return;
+      const pts = buildPoints(series, plotW, xOf, yOf);
+      ctx.lineWidth = 1.6;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const mid = (a.v + b.v) / 2;
+        ctx.strokeStyle = mid >= 0 ? "#ef4444" : "#22c55e";
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      if (pts.length === 1) {
+        const p = pts[0];
+        ctx.fillStyle = p.v >= 0 ? "#ef4444" : "#22c55e";
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+      const lastV = series[n - 1];
+      const lastP = pts[pts.length - 1];
+      if (lastP) {
+        const c = lastV >= 0 ? "#ef4444" : "#22c55e";
+        drawDot(ctx, lastP.x, lastP.y, c);
+        drawLabelSafely(ctx, lastP.x, lastP.y, fmtNum(lastV, 2), c, cssW, cssH, pts, 5.5);
+      }
+    }
+
+    function drawAllCharts() {
+      if (chartMode === 0 || chartMode === 6 || chartMode === 7) return;
+      const canvasA = document.getElementById("chartA");
+      const canvasB = document.getElementById("chartB");
+      const canvasC = document.getElementById("chartC");
+      const canvasD = document.getElementById("chartD");
+      
+      if (chartMode === 1) { // 四图
+        drawOneChart(canvasA, computeSumFTSeries());
+        drawOneChart(canvasB, computeLongxiaSeries());
+        drawOneChart(canvasC, computeTianSumFTSeries());
+        drawOneChart(canvasD, computeTianLongxiaSeries());
+      } else if (chartMode === 2) {
+        drawOneChart(canvasA, computeSumFTSeries());
+      } else if (chartMode === 3) {
+        drawOneChart(canvasB, computeLongxiaSeries());
+      } else if (chartMode === 4) {
+        drawOneChart(canvasC, computeTianSumFTSeries());
+      } else if (chartMode === 5) {
+        drawOneChart(canvasD, computeTianLongxiaSeries());
+      }
+    }
+
+    let chartRaf = null;
+    function renderChart() {
+      if (chartRaf) return;
+      chartRaf = requestAnimationFrame(() => {
+        chartRaf = null;
+        drawAllCharts();
+      });
+    }
+
+    function updateZoomUI() {
+      const label = document.getElementById("zoomLabelBtn");
+      if (label) label.textContent = Math.round(chartZoom * 100) + "%";
+      const inBtn = document.getElementById("zoomInBtn");
+      const outBtn = document.getElementById("zoomOutBtn");
+      if (inBtn) inBtn.disabled = chartZoom >= ZOOM_MAX - 1e-6;
+      if (outBtn) outBtn.disabled = chartZoom <= ZOOM_MIN + 1e-6;
+    }
+    function setChartZoom(z) {
+      chartZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+      document.documentElement.style.setProperty("--chart-zoom", String(chartZoom));
+      updateZoomUI();
+      renderChart();
+      save();
+    }
+
+    function updateUnmatchedZoomUI() {
+      const label = document.getElementById("unmatchedZoomLabelBtn");
+      if (label) label.textContent = Math.round(unmatchedZoom * 100) + "%";
+      const inBtn = document.getElementById("unmatchedZoomInBtn");
+      const outBtn = document.getElementById("unmatchedZoomOutBtn");
+      if (inBtn) inBtn.disabled = unmatchedZoom >= UNMATCHED_ZOOM_MAX - 1e-6;
+      if (outBtn) outBtn.disabled = unmatchedZoom <= UNMATCHED_ZOOM_MIN + 1e-6;
+    }
+    function setUnmatchedZoom(z) {
+      unmatchedZoom = Math.max(UNMATCHED_ZOOM_MIN, Math.min(UNMATCHED_ZOOM_MAX, z));
+      document.documentElement.style.setProperty("--unmatched-zoom", String(unmatchedZoom));
+      updateUnmatchedZoomUI();
+      save();
+    }
+
+    function updateChartModeUI() {
+      const btn = document.getElementById("chartBtn");
+      if (btn) btn.textContent = CHART_MODE_LABELS[chartMode];
+    }
+
+    function applyChartMode() {
+      const area = document.getElementById("chartArea");
+      const floatArea = document.getElementById("floatArea");
+      const unmatchedArea = document.getElementById("unmatchedArea");
+      const itemA = document.getElementById("chartItemA");
+      const itemB = document.getElementById("chartItemB");
+      const itemC = document.getElementById("chartItemC");
+      const itemD = document.getElementById("chartItemD");
+      updateChartModeUI();
+      area.classList.add("hidden");
+      floatArea.classList.add("hidden");
+      unmatchedArea.classList.add("hidden");
+      
+      document.body.classList.remove('view-chart-full');
+      
+      if (chartMode >= 1 && chartMode <= 5) {
+        area.classList.remove("hidden");
+        document.body.classList.add('view-chart-full');
+        
+        if (chartMode === 1) {
+          area.classList.remove("mode-single");
+          itemA.style.display = "";
+          itemB.style.display = "";
+          itemC.style.display = "";
+          itemD.style.display = "";
+        } else if (chartMode === 2) {
+          area.classList.add("mode-single");
+          itemA.style.display = "";
+          itemB.style.display = "none";
+          itemC.style.display = "none";
+          itemD.style.display = "none";
+        } else if (chartMode === 3) {
+          area.classList.add("mode-single");
+          itemA.style.display = "none";
+          itemB.style.display = "";
+          itemC.style.display = "none";
+          itemD.style.display = "none";
+        } else if (chartMode === 4) {
+          area.classList.add("mode-single");
+          itemA.style.display = "none";
+          itemB.style.display = "none";
+          itemC.style.display = "";
+          itemD.style.display = "none";
+        } else if (chartMode === 5) {
+          area.classList.add("mode-single");
+          itemA.style.display = "none";
+          itemB.style.display = "none";
+          itemC.style.display = "none";
+          itemD.style.display = "";
+        }
+      } else if (chartMode === 6) {
+        floatArea.classList.remove("hidden");
+      } else if (chartMode === 7) {
+        unmatchedArea.classList.remove("hidden");
+      }
+      
+      renderChart();
+      setTimeout(() => {
+          window.dispatchEvent(new Event('resize'));
+      }, 50);
+    }
+
+    function toggleChartMode() {
+      if (viewState !== 0) {
+        viewState = 0;
+        if (savedChartMode !== null) {
+            chartMode = savedChartMode;
+            savedChartMode = null;
+        }
+      }
+      chartMode = (chartMode + 1) % 8;
+      applyChartMode();
+      applyViewState();
+    }
+
+    function applyViewState() {
+      document.body.classList.remove('view-detail-full', 'view-output-full');
+      const btn = document.getElementById('detailBtn');
+      
+      if (viewState === 1) {
+        document.body.classList.add('view-detail-full');
+        btn.textContent = '输出';
+        setTimeout(renderRecentDetail, 50);
+      } else if (viewState === 2) {
+        document.body.classList.add('view-output-full');
+        btn.textContent = '四图';
+      } else if (viewState === 3) {
+        btn.textContent = '恢复';
+      } else {
+        btn.textContent = '明细';
+      }
+    }
+
+    function toggleDetailView() {
+      viewState = (viewState + 1) % 4;
+      
+      if (viewState === 3) {
+        savedChartMode = chartMode;
+        chartMode = 1;
+        applyChartMode();
+      } else if (viewState === 0) {
+        if (savedChartMode !== null) {
+            chartMode = savedChartMode;
+            savedChartMode = null;
+        }
+        applyChartMode();
+      }
+      
+      applyViewState();
+    }
+
+    function togglePanel() {
+      panelHidden = !panelHidden;
+      const grid = document.getElementById("toolbarGrid");
+      const btn = document.getElementById("panelBtn");
+      grid.classList.toggle("panel-hidden", panelHidden);
+      btn.classList.toggle("active", panelHidden);
+      
+      if (!panelHidden && viewState !== 0) {
+        viewState = 0;
+        if (savedChartMode !== null) {
+            chartMode = savedChartMode;
+            savedChartMode = null;
+        }
+        applyChartMode();
+        applyViewState();
+      }
+    }
+
+    function updatePreview() {
+      refreshUnmatchedPreview();
+      const raw = numInput.value.trim();
+      if (!raw || raw === "5" || raw === "6") {
+        if (previewData) { previewData = null; refreshOutputOnly(); }
+        return;
+      }
+      const x = parseFloat(raw);
+      if (isNaN(x) || x === 0) {
+        if (previewData) { previewData = null; refreshOutputOnly(); }
+        return;
+      }
+      const a = Math.abs(x);
+      const winState = calcState(inputs.concat([a]));
+      const loseState = calcState(inputs.concat([-a]));
+      previewData = {
+        win: fmtNum(winState.pingLi, 2),
+        lose: fmtNum(loseState.pingLi, 2),
+        zhongWin: fmtNum(winState.zhongPingLi, 2),
+        zhongLose: fmtNum(loseState.zhongPingLi, 2)
+      };
+      refreshOutputOnly();
+    }
+
+    function clearPreview() { previewData = null; }
+
+    // ========== 自动导出 ==========
+    function autoExport() {
+      try {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const filename =
+          `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_` +
+          `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.json`;
+        const jsonStr = JSON.stringify(getExportData(), null, 2);
+        const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+        toast("已输入 " + inputs.length + " 条 · 自动导出 " + filename, false);
+      } catch (e) {
+        toast("自动导出失败，请手动导出");
+      }
+    }
+
+    // ========== 导出明细（适用于 WPS） ==========
+    function generateExportDetail() {
+      if (inputs.length === 0) return;
+      
+      let start = parseInt(document.getElementById("exportRangeStart").value, 10);
+      let end = parseInt(document.getElementById("exportRangeEnd").value, 10);
+
+      if (isNaN(start) || start < 1) start = 1;
+      if (isNaN(end) || end > inputs.length) end = inputs.length;
+      if (start > end) {
+        toast("起始序号不能大于结束序号");
+        start = end;
+      }
+      if (start < 1) start = 1;
+
+      document.getElementById("exportRangeStart").value = start;
+      document.getElementById("exportRangeEnd").value = end;
+
+      let textSymbols = "";
+      let textValues = "";
+
+      for (let i = start - 1; i < end; i++) {
+        const x = inputs[i];
+        textSymbols += (x > 0 ? SYMBOL_WIN : SYMBOL_LOSE) + "\n";
+        textValues += fmtNum(x) + "\n";
+      }
+
+      document.getElementById("exportDetailSymbols").value = textSymbols;
+      document.getElementById("exportDetailValues").value = textValues;
+    }
+
+    function openExportDetailModal() {
+      if (inputs.length === 0) {
+        toast("暂无明细数据");
+        return;
+      }
+      document.getElementById("exportRangeStart").value = 1;
+      document.getElementById("exportRangeEnd").value = inputs.length;
+      generateExportDetail();
+      document.getElementById("exportDetailModal").classList.add("show");
+    }
+
+    function copyTextFrom(elId, successMsg) {
+      const text = document.getElementById(elId).value;
+      if (!text) { toast("没有内容可复制"); return; }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => toast(successMsg))
+          .catch(() => fallbackCopyEl(elId, successMsg));
+      } else fallbackCopyEl(elId, successMsg);
+    }
+
+    function fallbackCopyEl(elId, successMsg) {
+      const ta = document.getElementById(elId);
+      ta.focus(); ta.select();
+      try { document.execCommand("copy"); toast(successMsg); }
+      catch (e) { toast("复制失败，请长按文本手动复制"); }
+    }
+
+    function downloadText(text, filename) {
+      if (!text) { toast("没有内容可下载"); return; }
+      try {
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+        toast("已触发下载");
+      } catch (e) {
+        toast("下载失败，请改用「复制内容」");
+      }
+    }
+
+    // ========== 天清零快照（永久保留，恢复不删除） ==========
+    function formatSnapshotTime(iso) {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso || '';
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    function findActiveSnapshotId() {
+      for (let i = tianSnapshots.length - 1; i >= 0; i--) {
+        const s = tianSnapshots[i];
+        if (s.tianStartIndex === tianStartIndex &&
+            s.tianClearMark === tianClearMark &&
+            Math.abs((s.tianF1 || 0) - (baseState.tianF1 || 0)) < 1e-9) {
+          return s.id;
+        }
+      }
+      return null;
+    }
+
+    function renderTianSnapList() {
+      const el = document.getElementById('tianSnapList');
+      if (!el) return;
+      if (!tianSnapshots || tianSnapshots.length === 0) {
+        el.innerHTML = '<div class="detail-edit-empty">暂无快照</div>';
+        return;
+      }
+      const activeId = findActiveSnapshotId();
+      const items = [];
+      for (let i = tianSnapshots.length - 1; i >= 0; i--) {
+        const s = tianSnapshots[i];
+        const isActive = (s.id === activeId);
+        items.push(`<div class="tian-snap-row">
+          <div class="tian-snap-info">
+            <div class="tian-snap-time">${formatSnapshotTime(s.savedAt)}${isActive ? ' · 当前' : ''}</div>
+            <div class="tian-snap-meta">条目 ${s.inputsLength} · 标记 ${s.tianClearMark} · 天力1 ${fmtNum(s.tianF1, 2)}</div>
+          </div>
+          <button class="btn ${isActive ? 'btn-tian active' : 'btn-secondary'} tian-snap-restore" data-sid="${s.id}">${isActive ? '已应用' : '恢复'}</button>
+          <button class="btn btn-danger tian-snap-del" data-sid="${s.id}">删除</button>
+        </div>`);
+      }
+      el.innerHTML = items.join('');
+      el.querySelectorAll('.tian-snap-restore').forEach(b => {
+        b.addEventListener('click', () => { vibrate(); restoreTianSnapshot(b.dataset.sid); });
+      });
+      el.querySelectorAll('.tian-snap-del').forEach(b => {
+        b.addEventListener('click', () => { vibrate(); deleteTianSnapshot(b.dataset.sid); });
+      });
+    }
+
+    function openTianSnapModal() {
+      renderTianSnapList();
+      document.getElementById('tianSnapModal').classList.add('show');
+    }
+    function closeTianSnapModal() {
+      document.getElementById('tianSnapModal').classList.remove('show');
+    }
+
+    function buildFullTianDetailsSnapshot() {
+      const details = [];
+      for (let i = 0; i < inputs.length; i++) {
+        const td = getFullTianDetailRow(i);
+        details.push(td ? { longxia: td.longxia, zhongLi: td.zhongLi } : null);
+      }
+      return details;
+    }
+
+    function doTianClear() {
+      vibrate();
+      if (inputs.length === 0) {
+        toast('暂无数据，无需清零');
+        return;
+      }
+      if (!confirm('确定将天系列清零？清零前会自动保存一份快照。永久归档的天龙/天终力不受影响，可随时恢复。')) return;
+
+      updateTianDetailData();
+      const details = buildFullTianDetailsSnapshot();
+
+      const snap = {
+        id: 'ts_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        savedAt: new Date().toISOString(),
+        tianStartIndex: tianStartIndex,
+        tianClearMark: tianClearMark,
+        tianF1: baseState.tianF1 || 0,
+        inputsLength: inputs.length,
+        details
+      };
+      tianSnapshots.push(snap);
+
+      tianStartIndex = inputs.length;
+      tianClearMark = inputs.length + 1;
+      baseState.tianF1 = 0;
+      baseState.tianPingLi1 = 0;
+      save();
+
+      const st = calcState(inputs);
+      const um = getUnmatchedData();
+      const t = getTianState(inputs, st);
+      renderOutput(formatOutput(st, um.strength, um.posCount, um.negCount, t));
+      toast('天系列已清零，快照已保存，历史明细已归档');
+    }
+
+    // 恢复快照：不删除任何快照
+    function restoreTianSnapshot(id) {
+      const snap = tianSnapshots.find(s => s.id === id);
+      if (!snap) { toast('快照不存在'); return; }
+      if (!confirm('恢复后，当前天系列将回滚到该快照时刻。快照不会被删除，之后仍可再次恢复。确定？')) return;
+
+      tianStartIndex = snap.tianStartIndex;
+      tianClearMark = snap.tianClearMark;
+      baseState.tianF1 = snap.tianF1 || 0;
+      baseState.tianPingLi1 = 0;
+
+      save();
+
+      const st = calcState(inputs);
+      const um = getUnmatchedData();
+      const t = getTianState(inputs, st);
+      renderOutput(formatOutput(st, um.strength, um.posCount, um.negCount, t));
+      renderTianSnapList();
+      toast('已恢复到该快照（快照已保留）');
+    }
+
+    function deleteTianSnapshot(id) {
+      const idx = tianSnapshots.findIndex(s => s.id === id);
+      if (idx < 0) { toast('快照不存在'); return; }
+      if (!confirm('删除快照只影响快照列表本身。永久归档的天龙/天终力不会受影响，明细表仍完整显示。确定删除？')) return;
+      tianSnapshots.splice(idx, 1);
+      save();
+      renderTianSnapList();
+      toast('快照已删除（归档明细不受影响）');
+    }
+
+    // ========== 自由编辑 ==========
+    let umEditVals = [];
+
+    function readUmEditList() {
+      const els = document.querySelectorAll("#umEditList input[data-umidx]");
+      if (els.length === 0) return [];
+      const vals = [];
+      for (const inp of els) {
+        const n = parseFloat((inp.value || "").trim());
+        vals.push(isNaN(n) ? 0 : n);
+      }
+      return vals;
+    }
+
+    function renderUmEditList(vals) {
+      umEditVals = vals.slice();
+      const listEl = document.getElementById("umEditList");
+      const badge = document.getElementById("umCountBadge");
+      if (badge) badge.textContent = String(vals.length);
+      if (!vals || vals.length === 0) {
+        listEl.innerHTML = '<div class="detail-edit-empty">无未抵消项</div>';
+        return;
+      }
+      listEl.innerHTML = vals.map((v, i) => {
+        const cls = v > 0 ? "pos" : (v < 0 ? "neg" : "");
+        return `<div class="detail-edit-row">
+          <span class="idx">#${i + 1}</span>
+          <input type="text" inputmode="decimal" data-umidx="${i}" class="${cls}" value="${fmtNum(v)}" />
+        </div>`;
+      }).join("");
+    }
+
+    function openFreeEditModal() {
+      const st = calcState(inputs);
+      const um = getUnmatchedData();
+      const t = getTianState(inputs, st);
+
+      const fields = [
+        { key: 'ma', label: '马', val: st.ma, dec: 0 },
+        { key: 'maPing', label: '马平', val: st.maPing, dec: 2 },
+        { key: 'fan', label: '饭', val: st.fan, dec: 2 },
+        { key: 'dong', label: '洞', val: st.dong, dec: 2 },
+        { key: 'sheng', label: '生', val: st.sheng, dec: 0 },
+        { key: 'ri', label: '日', val: st.ri, dec: 0 },
+        { key: 'longxia', label: '龙虾', val: st.longxia, dec: 0 },
+        { key: 'yingSheng', label: '应生', val: st.yingSheng, dec: 4 },
+        { key: 'f', label: '力', val: st.f, dec: 2 },
+        { key: 'pingLi', label: '平力', val: st.pingLi, dec: 2 },
+        { key: 'tf', label: '总力', val: st.tf, dec: 2 },
+        { key: 'strength', label: '实力', val: um.strength, dec: 2 },
+        { key: 'shengPct', label: '圣', val: st.shengPct, dec: 2 },
+        { key: 'zhongLi', label: '终力', val: st.zhongLi, dec: 2 },
+        { key: 'zhongPingLi', label: '终平力', val: st.zhongPingLi, dec: 2 },
+        { key: 'maxZuiLi', label: '最力', val: st.maxZuiLi, dec: 2 },
+        { key: 'minZuiPa', label: '最趴', val: st.minZuiPa, dec: 2 },
+        { key: 'maxShengDuo', label: '生多', val: st.maxShengDuo, dec: 0 },
+        { key: 'maxRiDuo', label: '日多', val: st.maxRiDuo, dec: 0 },
+        { key: 'daSheng', label: '大生', val: st.daSheng, dec: 0 },
+        { key: 'daRi', label: '大日', val: st.daRi, dec: 0 },
+        { key: 'dangSheng', label: '当生', val: st.dangSheng, dec: 0 },
+        { key: 'dangRi', label: '当日', val: st.dangRi, dec: 0 },
+        { key: 'tianF1', label: '天力1', val: t.tianF1, dec: 2 },
+        { key: 'tianPingLi1', label: '天平力1', val: t.tianPingLi1, dec: 1 }
+      ];
+      const grid = document.getElementById("freeEditGrid");
+      grid.innerHTML = fields.map(f => `
+        <div class="state-edit-item">
+          <label>${f.label}</label>
+          <input type="text" inputmode="decimal" data-key="${f.key}" data-dec="${f.dec}"
+            value="${fmtNum(f.val, f.dec)}" />
+        </div>
+      `).join("");
+
+      detailCleared = false;
+      const listEl = document.getElementById("detailEditList");
+      const badge = document.getElementById("detailCountBadge");
+      if (badge) badge.textContent = String(inputs.length);
+      if (inputs.length === 0) {
+        listEl.innerHTML = '<div class="detail-edit-empty">暂无明细记录</div>';
+      } else {
+        const MAXSHOW = 10;
+        const startIdx = Math.max(0, inputs.length - MAXSHOW);
+        let html = "";
+        if (startIdx > 0) html += `<div class="detail-edit-more">仅显示最近 ${MAXSHOW} 条（更早的 ${startIdx} 条不在此处编辑，但会保留）</div>`;
+        for (let i = inputs.length - 1; i >= startIdx; i--) {
+          const cls = inputs[i] > 0 ? "pos" : "neg";
+          html += `<div class="detail-edit-row">
+            <span class="idx">#${i + 1}</span>
+            <input type="text" inputmode="decimal" data-idx="${i}" class="${cls}" value="${fmtNum(inputs[i])}" />
+          </div>`;
+        }
+        listEl.innerHTML = html;
+      }
+
+      const sorted = sortUnmatchedForDisplay(um.unmatched);
+      renderUmEditList(sorted.map(it => it.orig));
+
+      document.getElementById("freeEditModal").classList.add("show");
+    }
+
+    function closeFreeEditModal() {
+      document.getElementById("freeEditModal").classList.remove("show");
+    }
+
+    function saveFreeEdit() {
+      const els = document.querySelectorAll("#freeEditGrid input[data-key]");
+      const edited = {};
+      for (const inp of els) {
+        const key = inp.dataset.key;
+        const num = parseFloat(inp.value.trim());
+        if (isNaN(num)) { toast(`「${key}」不是有效数字`); return; }
+        edited[key] = num;
+      }
+
+      let newInputs;
+      if (detailCleared) {
+        newInputs = [];
+      } else {
+        newInputs = inputs.slice();
+        const detailEls = document.querySelectorAll("#detailEditList input[data-idx]");
+        for (const inp of detailEls) {
+          const idx = parseInt(inp.dataset.idx, 10);
+          const num = parseFloat(inp.value.trim());
+          if (isNaN(num)) { toast(`第 ${idx + 1} 条记录不是有效数字`); return; }
+          if (num === 0) { toast(`第 ${idx + 1} 条记录不能为 0`); return; }
+          newInputs[idx] = num;
+        }
+      }
+
+      const umVals = readUmEditList();
+      for (let i = 0; i < umVals.length; i++) {
+        if (umVals[i] === 0) { toast(`未抵消第 ${i + 1} 项必须为非零数字`); return; }
+      }
+
+      const originalUm = getUnmatchedData();
+      const origOrigs = sortUnmatchedForDisplay(originalUm.unmatched).map(it => it.orig);
+      const newOrigs = sortOrigsForDisplay(umVals);
+      let itemsChanged = (origOrigs.length !== newOrigs.length);
+      if (!itemsChanged) {
+        for (let i = 0; i < origOrigs.length; i++) {
+          if (Math.abs(origOrigs[i] - newOrigs[i]) > 1e-9) { itemsChanged = true; break; }
+        }
+      }
+      const newStrength = edited.strength;
+      const strengthChanged = Math.abs((newStrength || 0) - (originalUm.strength || 0)) > 1e-9;
+
+      const newBase = {
+        sheng: Math.max(0, Math.round(edited.sheng)),
+        ri: Math.max(0, Math.round(edited.ri)),
+        dangSheng: Math.max(0, Math.round(edited.dangSheng)),
+        dangRi: Math.max(0, Math.round(edited.dangRi)),
+        daSheng: Math.max(0, Math.round(edited.daSheng)),
+        daRi: Math.max(0, Math.round(edited.daRi)),
+        maxShengDuo: Math.max(0, Math.round(edited.maxShengDuo)),
+        maxRiDuo: Math.max(0, Math.round(edited.maxRiDuo)),
+        f: edited.f,
+        tf: edited.tf,
+        fan: Math.abs(edited.fan),
+        dong: edited.dong,
+        lastSign: edited.dangSheng > 0 ? 1 : (edited.dangRi > 0 ? -1 : 0),
+        maxZuiLi: edited.maxZuiLi,
+        minZuiPa: edited.minZuiPa,
+        ma: Math.max(0, Math.round(edited.ma)),
+        longxia: Math.round(edited.longxia),
+        yingSheng: edited.yingSheng,
+        pingLi: edited.pingLi,
+        shengPct: edited.shengPct,
+        maPing: edited.maPing,
+        zhongLi: edited.zhongLi,
+        zhongPingLi: edited.zhongPingLi,
+        _freeze: true,
+        _frozenAt: newInputs.length,
+        tianF1: edited.tianF1
+      };
+
+      if ('tianPingLi1' in edited && !('tianF1' in edited)) {
+          const currentSt = calcState(inputs);
+          const currentT = getTianState(inputs, currentSt);
+          const lx = currentT.tianLongxia;
+          if (lx !== 0) newBase.tianF1 = edited.tianPingLi1 * Math.abs(lx);
+          else newBase.tianF1 = 0;
+      }
+
+      baseState = newBase;
+      inputs = newInputs;
+
+      if (itemsChanged || strengthChanged) {
+        unmatchedOverride = {
+          items: umVals.map(o => ({ orig: o })),
+          strength: newStrength
+        };
+      }
+
+      // 自由编辑后：清空 tianStartIndex 之后的归档，让它们重算；之前的历史归档保留
+      if (detailCleared) {
+        detailTianArchive = [];
+      } else {
+        const arr = detailTianArchive.slice();
+        for (let i = tianStartIndex; i < newInputs.length; i++) {
+          arr[i] = null;
+        }
+        detailTianArchive = arr;
+      }
+
+      outputHistory = [];
+      redoStack = [];
+      clearPreview();
+      rebuild();
+      closeFreeEditModal();
+      toast("已保存 · 原有数据全部保留");
+    }
+
+    // ========== 核心操作 ==========
+    function processNumber(x) {
+      if (typeof x !== "number" || isNaN(x) || x === 0) {
+        toast("请输入非零数值");
+        return;
+      }
+
+      inputs.push(x);
+      redoStack = [];
+      const st = calcState(inputs);
+      const um = getUnmatchedData();
+      const t = getTianState(inputs, st);
+      const out = formatOutput(st, um.strength, um.posCount, um.negCount, t);
+      outputHistory.push(out);
+
+      const glow = document.getElementById("screenGlow");
+      if (glow) {
+        glow.className = "screen-glow";
+        void glow.offsetWidth;
+        glow.classList.add(x > 0 ? "red" : "green");
+        if (glow.timer) clearTimeout(glow.timer);
+        glow.timer = setTimeout(() => {
+          glow.classList.add("fade-out");
+          setTimeout(() => { glow.className = "screen-glow"; }, 500);
+        }, 2000);
+      }
+
+      if (st.longxia === 0) { vibrate(); bubbleToast("<span>0</span>", 1000); }
+      if (st.dangRi >= 5) { vibrate(); bubbleToast(`<span class="neg">-${st.dangRi}</span>`, 2000); }
+      if (st.dangSheng >= 5) { vibrate(); bubbleToast(`<span class="pos">${st.dangSheng}</span>`, 2000); }
+
+      let checkHtml = "";
+      if (inputs.length % 10 === 0 && inputs.length > 0) {
+        const result = doCheck(3);
+        if (result.ok) checkHtml = `<div class="check-msg ok">ok</div>`;
+        else {
+          checkHtml = `<div class="check-msg error">${result.msg}</div>`;
+          checkHtml += `<div class="output-card" style="margin-top:8px;min-height:auto">${result.correctHtml}</div>`;
+        }
+      }
+      renderOutput(out, checkHtml);
+      save();
+
+      if (inputs.length > 0 && inputs.length % AUTO_EXPORT_COUNT === 0) {
+        setTimeout(autoExport, 300);
+      }
+    }
+
+    function undo() {
+      clearPreview();
+      if (inputs.length === 0) { toast("没有可撤销的输入"); return; }
+      const removed = inputs.pop();
+      outputHistory.pop();
+      redoStack.push(removed);
+      
+      if (inputs.length < tianStartIndex) {
+          tianStartIndex = inputs.length;
+      }
+      
+      const st = calcState(inputs);
+      const um = getUnmatchedData();
+      const t = getTianState(inputs, st);
+      renderOutput(formatOutput(st, um.strength, um.posCount, um.negCount, t));
+      save();
+      toast("已撤销");
+    }
+
+    function redo() {
+      clearPreview();
+      if (redoStack.length === 0) { toast("没有可重做的记录"); return; }
+      const x = redoStack.pop();
+      inputs.push(x);
+      const st = calcState(inputs);
+      const um = getUnmatchedData();
+      const t = getTianState(inputs, st);
+      const out = formatOutput(st, um.strength, um.posCount, um.negCount, t);
+      outputHistory.push(out);
+      renderOutput(out);
+      save();
+      toast("已恢复");
+    }
+
+    function doCheck(n) {
+      const len = outputHistory.length;
+      if (len === 0) return { ok: true, msg: "无数据可检查" };
+      const checkCount = Math.min(n, len);
+      const errors = [];
+      for (let i = 0; i < checkCount; i++) {
+        const idx = len - 1 - i;
+        const partial = inputs.slice(0, idx + 1);
+        const st = calcState(partial);
+        const um = calcUnmatched(partial);
+        const t = getTianState(partial, st);
+        const correct = formatOutput(st, um.strength, um.posCount, um.negCount, t);
+        const stored = outputHistory[idx];
+        if (stored !== correct) errors.push({ pos: idx + 1, stored, correct });
+      }
+      if (errors.length === 0) return { ok: true, msg: n >= 20 ? "检查：最近20次无错误" : "ok" };
+      let msg = `检查：发现 ${errors.length} 处错误（最近${checkCount}次中）\n`;
+      errors.forEach(e => { msg += `\n第${e.pos}次输出有误`; });
+      const st = calcState(inputs);
+      const um = getUnmatchedData();
+      const t = getTianState(inputs, st);
+      const latestCorrect = formatOutput(st, um.strength, um.posCount, um.negCount, t);
+      return { ok: false, msg, correctHtml: renderText(latestCorrect), latestCorrect };
+    }
+
+    function manualCheck() {
+      clearPreview();
+      const result = doCheck(20);
+      let checkHtml = "";
+      if (result.ok) checkHtml = `<div class="check-msg ok">${result.msg}</div>`;
+      else {
+        checkHtml = `<div class="check-msg error">${result.msg.replace(/\n/g, "<br>")}</div>`;
+        checkHtml += `<div class="output-card" style="margin-top:8px;min-height:auto">${result.correctHtml}</div>`;
+      }
+      const st = calcState(inputs);
+      const um = getUnmatchedData();
+      const t = getTianState(inputs, st);
+      renderOutput(formatOutput(st, um.strength, um.posCount, um.negCount, t), checkHtml);
+    }
+
+    // ========== 导出 / 导入 ==========
+    function getExportData() {
+      return {
+        inputs, outputHistory, baseState, chartZoom, unmatchedZoom,
+        unmatchedOverride, tianStartIndex, tianClearMark,
+        tianSnapshots,
+        detailTianArchive,   // 永久归档的天龙/天终力明细
+        version: 5,
+        savedAt: new Date().toISOString(),
+        note: "生日统计规则数据备份（含永久明细归档）"
+      };
+    }
+
+    function openExportModal() {
+      document.getElementById("exportText").value = JSON.stringify(getExportData(), null, 2);
+      document.getElementById("exportModal").classList.add("show");
+    }
+
+    function exportToFile() {
+      const jsonStr = document.getElementById("exportText").value || JSON.stringify(getExportData(), null, 2);
+      try {
+        const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        a.download = "shengri_backup_" + ts + ".json";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+        toast("已触发下载，请到「下载」文件夹查看");
+      } catch (e) { toast("下载失败，请改用「复制内容」"); }
+    }
+
+    function copyExportText() {
+      copyTextFrom("exportText", "已复制，可粘贴到备忘录保存");
+    }
+
+    function importFromFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) { applyImportData(e.target.result); };
+      reader.onerror = function() { toast("读取文件失败"); };
+      reader.readAsText(file);
+    }
+
+    function applyImportData(raw) {
+      try {
+        const data = JSON.parse(raw);
+        if (!Array.isArray(data.inputs)) throw new Error("格式错误");
+        inputs = data.inputs.map(Number).filter(x => !isNaN(x) && x !== 0);
+        outputHistory = data.outputHistory || [];
+        if (typeof data.chartZoom === "number" && isFinite(data.chartZoom)) {
+          chartZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, data.chartZoom));
+          document.documentElement.style.setProperty("--chart-zoom", String(chartZoom));
+          updateZoomUI();
+        }
+        if (typeof data.unmatchedZoom === "number" && isFinite(data.unmatchedZoom)) {
+          unmatchedZoom = Math.max(UNMATCHED_ZOOM_MIN, Math.min(UNMATCHED_ZOOM_MAX, data.unmatchedZoom));
+          document.documentElement.style.setProperty("--unmatched-zoom", String(unmatchedZoom));
+          updateUnmatchedZoomUI();
+        }
+        if (typeof data.tianStartIndex === "number" && isFinite(data.tianStartIndex)) {
+          tianStartIndex = data.tianStartIndex;
+        } else {
+          tianStartIndex = 0;
+        }
+        if (typeof data.tianClearMark === "number" && isFinite(data.tianClearMark)) {
+          tianClearMark = data.tianClearMark;
+        } else {
+          tianClearMark = 0;
+        }
+        tianSnapshots = normalizeTianSnapshots(data.tianSnapshots);
+        detailTianArchive = normalizeTianArchive(data.detailTianArchive, inputs.length);
+        if (data.baseState && typeof data.baseState === "object") {
+          baseState = Object.assign({
+            sheng: 0, ri: 0, dangSheng: 0, dangRi: 0,
+            daSheng: 0, daRi: 0, maxShengDuo: 0, maxRiDuo: 0,
+            f: 0, tf: 0, fan: 0, dong: 0, lastSign: 0,
+            maxZuiLi: 0, minZuiPa: 0, _freeze: false, _frozenAt: 0,
+            ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+            shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0,
+            tianF1: 0
+          }, data.baseState);
+          if (typeof baseState._frozenAt !== "number") baseState._frozenAt = 0;
+        } else {
+          baseState = {
+            sheng: 0, ri: 0, dangSheng: 0, dangRi: 0,
+            daSheng: 0, daRi: 0, maxShengDuo: 0, maxRiDuo: 0,
+            f: 0, tf: 0, fan: 0, dong: 0, lastSign: 0,
+            maxZuiLi: 0, minZuiPa: 0, _freeze: false, _frozenAt: 0,
+            ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+            shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0,
+            tianF1: 0
+          };
+        }
+        if (data.unmatchedOverride && Array.isArray(data.unmatchedOverride.items)) {
+          unmatchedOverride = {
+            items: data.unmatchedOverride.items
+              .filter(it => it && typeof it.orig === "number" && it.orig !== 0)
+              .map(it => ({ orig: it.orig })),
+            strength: typeof data.unmatchedOverride.strength === "number"
+              ? data.unmatchedOverride.strength : 0
+          };
+        } else {
+          unmatchedOverride = null;
+        }
+        redoStack = [];
+        clearPreview();
+        rebuild();
+        document.getElementById("importModal").classList.remove("show");
+        toast("导入成功 · 共" + inputs.length + "次");
+      } catch (err) { toast("导入失败：内容格式不正确"); }
+    }
+
+    // ========== 事件绑定 ==========
+    const numInput = document.getElementById("numInput");
+
+    function submit() {
+      let raw = numInput.value.trim();
+      if (!raw) return;
+      if (raw === "6") {
+        vibrate(); clearPreview(); numInput.value = ""; manualCheck(); return;
+      }
+      const x = parseFloat(raw);
+      if (isNaN(x) || x === 0) {
+        vibrate();
+        numInput.classList.add("error");
+        setTimeout(() => numInput.classList.remove("error"), 500);
+        toast("请输入非零数值", true);
+        return;
+      }
+      if (x % 5 !== 0) {
+        vibrate();
+        numInput.classList.add("error");
+        setTimeout(() => numInput.classList.remove("error"), 500);
+        flashYellowGlow(2000);
+        playBeep(2000);
+        warnBigToast("5、6", 2000);
+        return;
+      }
+      vibrate();
+      clearPreview();
+      stopBeep();
+      numInput.value = "";
+      processNumber(x);
+      numInput.focus();
+    }
+
+    document.getElementById("submitBtn").addEventListener("click", () => { vibrate(); submit(); });
+    numInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+    numInput.addEventListener("input", updatePreview);
+
+    document.getElementById("undoBtn").addEventListener("click", () => { vibrate(); undo(); });
+    document.getElementById("redoBtn").addEventListener("click", () => { vibrate(); redo(); });
+    document.getElementById("chartBtn").addEventListener("click", () => { vibrate(); toggleChartMode(); });
+    document.getElementById("panelBtn").addEventListener("click", () => { vibrate(); togglePanel(); });
+    document.getElementById("detailBtn").addEventListener("click", () => { vibrate(); toggleDetailView(); });
+
+    document.getElementById("zoomInBtn").addEventListener("click", () => { vibrate(); setChartZoom(chartZoom * ZOOM_STEP); });
+    document.getElementById("zoomOutBtn").addEventListener("click", () => { vibrate(); setChartZoom(chartZoom / ZOOM_STEP); });
+    document.getElementById("zoomLabelBtn").addEventListener("click", () => {
+      vibrate(); setChartZoom(1); toast("曲线已重置为 100%");
+    });
+
+    document.getElementById("unmatchedZoomInBtn").addEventListener("click", () => { vibrate(); setUnmatchedZoom(unmatchedZoom * UNMATCHED_ZOOM_STEP); });
+    document.getElementById("unmatchedZoomOutBtn").addEventListener("click", () => { vibrate(); setUnmatchedZoom(unmatchedZoom / UNMATCHED_ZOOM_STEP); });
+    document.getElementById("unmatchedZoomLabelBtn").addEventListener("click", () => {
+      vibrate(); setUnmatchedZoom(1); toast("未抵消已重置为 100%");
+    });
+
+    document.getElementById("fullEditBtn").addEventListener("click", () => { vibrate(); openFreeEditModal(); });
+    document.getElementById("freeEditBtn").addEventListener("click", () => { vibrate(); openFreeEditModal(); });
+    document.getElementById("closeFreeEdit").addEventListener("click", () => { vibrate(); closeFreeEditModal(); });
+    document.getElementById("saveFreeEdit").addEventListener("click", () => { vibrate(); saveFreeEdit(); });
+
+    document.getElementById("umAddBtn").addEventListener("click", () => {
+      vibrate();
+      const vals = readUmEditList();
+      vals.push(5);
+      renderUmEditList(vals);
+    });
+    document.getElementById("umDelBtn").addEventListener("click", () => {
+      vibrate();
+      const vals = readUmEditList();
+      vals.pop();
+      renderUmEditList(vals);
+    });
+
+    document.getElementById("umClearBtn").addEventListener("click", () => {
+      vibrate();
+      if (!confirm("确定清除未抵消区域所有数据？（保存后生效）")) return;
+      renderUmEditList([]);
+      toast("已清除未抵消 · 保存后生效");
+    });
+
+    document.getElementById("detailClearBtn").addEventListener("click", () => {
+      vibrate();
+      if (!confirm("确定清除明细表所有数据？（保存后生效，历史记录将全部删除）")) return;
+      detailCleared = true;
+      document.getElementById("detailEditList").innerHTML = '<div class="detail-edit-empty">已清除全部明细（保存后生效）</div>';
+      document.getElementById("detailCountBadge").textContent = "0";
+      toast("已清除明细 · 保存后生效");
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      vibrate();
+      if (!confirm("确定清空所有数据（含基线、快照、永久归档）？此操作不可恢复。")) return;
+      inputs = []; outputHistory = []; redoStack = [];
+      unmatchedOverride = null;
+      tianSnapshots = [];
+      detailTianArchive = [];   // 永久归档一并清除
+      tianStartIndex = 0;
+      tianClearMark = 0;
+      baseState = {
+        sheng: 0, ri: 0, dangSheng: 0, dangRi: 0,
+        daSheng: 0, daRi: 0, maxShengDuo: 0, maxRiDuo: 0,
+        f: 0, tf: 0, fan: 0, dong: 0, lastSign: 0,
+        maxZuiLi: 0, minZuiPa: 0, _freeze: false, _frozenAt: 0,
+        ma: 0, longxia: 0, yingSheng: 0, pingLi: 0,
+        shengPct: 0, maPing: 0, zhongLi: 0, zhongPingLi: 0,
+        tianF1: 0
+      };
+      clearPreview();
+      const st = calcState([]);
+      const t = getTianState([], st);
+      renderOutput(formatOutput(st, 0, 0, 0, t));
+      document.getElementById("checkArea").innerHTML = "";
+      save();
+      toast("已清空");
+    });
+
+    document.getElementById("tianClearBtn").addEventListener("click", () => {
+      doTianClear();
+    });
+
+    document.getElementById("tianSnapBtn").addEventListener("click", () => {
+      vibrate(); openTianSnapModal();
+    });
+    document.getElementById("closeTianSnap").addEventListener("click", () => {
+      vibrate(); closeTianSnapModal();
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", () => { vibrate(); openExportModal(); });
+    document.getElementById("closeExport").addEventListener("click", () => {
+      vibrate(); document.getElementById("exportModal").classList.remove("show");
+    });
+    document.getElementById("doExport").addEventListener("click", () => { vibrate(); exportToFile(); });
+    document.getElementById("copyExport").addEventListener("click", () => { vibrate(); copyExportText(); });
+
+    document.getElementById("exportDetailBtn").addEventListener("click", () => { vibrate(); openExportDetailModal(); });
+    document.getElementById("closeExportDetail").addEventListener("click", () => {
+      vibrate(); document.getElementById("exportDetailModal").classList.remove("show");
+    });
+    document.getElementById("applyRangeBtn").addEventListener("click", () => { vibrate(); generateExportDetail(); });
+    document.getElementById("copyExportSymbols").addEventListener("click", () => { vibrate(); copyTextFrom("exportDetailSymbols", "已复制符号"); });
+    document.getElementById("copyExportValues").addEventListener("click", () => { vibrate(); copyTextFrom("exportDetailValues", "已复制数值"); });
+    document.getElementById("doExportSymbols").addEventListener("click", () => {
+      vibrate();
+      const text = document.getElementById("exportDetailSymbols").value;
+      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      downloadText(text, "symbols_" + ts + ".txt");
+    });
+    document.getElementById("doExportValues").addEventListener("click", () => {
+      vibrate();
+      const text = document.getElementById("exportDetailValues").value;
+      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      downloadText(text, "values_" + ts + ".txt");
+    });
+
+    document.getElementById("importBtn").addEventListener("click", () => {
+      vibrate();
+      document.getElementById("importText").value = "";
+      document.getElementById("importModal").classList.add("show");
+    });
+    document.getElementById("closeImport").addEventListener("click", () => {
+      vibrate(); document.getElementById("importModal").classList.remove("show");
+    });
+    document.getElementById("pickFileBtn").addEventListener("click", () => {
+      vibrate(); document.getElementById("fileInput").click();
+    });
+    document.getElementById("fileInput").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) importFromFile(file);
+      e.target.value = "";
+    });
+    document.getElementById("doImportText").addEventListener("click", () => {
+      vibrate();
+      const raw = document.getElementById("importText").value.trim();
+      if (!raw) { toast("请先粘贴备份内容"); return; }
+      applyImportData(raw);
+    });
+
+    document.querySelectorAll(".modal-overlay").forEach(el => {
+      el.addEventListener("click", e => {
+        if (e.target === el) { vibrate(); el.classList.remove("show"); }
+      });
+    });
+
+    document.getElementById("recentDetail").addEventListener("scroll", () => {
+      if (detailLock) return;
+      renderDetailRows();
+    });
+
+    window.addEventListener("resize", () => {
+        renderChart();
+        if (viewState === 1) {
+            renderRecentDetail();
+        }
+    });
+
+    // 初始化
+    load();
+    document.documentElement.style.setProperty("--chart-zoom", String(chartZoom));
+    document.documentElement.style.setProperty("--unmatched-zoom", String(unmatchedZoom));
+    applyChartMode();
+    updateZoomUI();
+    updateUnmatchedZoomUI();
+    const st = calcState(inputs);
+    const t = getTianState(inputs, st);
+    renderOutput(formatOutput(st, 0, 0, 0, t));
+    renderChart();
+    refreshUnmatchedPreview();
+    applyViewState();
+
+    let lastTouch = 0;
+    document.addEventListener("touchend", e => {
+      const now = Date.now();
+      if (now - lastTouch <= 300) e.preventDefault();
+      lastTouch = now;
+    }, { passive: false });
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  </script>
+    </body>
+</html>

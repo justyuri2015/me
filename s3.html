@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0d0d0d" />
+    <meta name="description" content="生日统计规则 App" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <title>生日统计</title>
+    <style>
+    :root{--bg:#0d0d0d;--card:#1a1a1a;--border:#2a2a2a;--text:#e8e8e8;--muted:#888;--accent:#3b82f6;--green:#22c55e;--red:#ef4444;--yellow:#eab308;--orange:#f97316;--fuchsia:#d946ef;--cyan:#22d3ee;--input-bg:#222;--chart-zoom:1;--unmatched-zoom:1;}
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-size:15px;line-height:1.4;overscroll-behavior:none;}
+    body{display:flex;flex-direction:column;max-width:480px;margin:0 auto;height:100dvh;overflow:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+    .screen-glow{position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:0;transition:opacity .3s ease-out;}
+    .screen-glow.red{box-shadow:inset 0 0 50px 15px rgba(239,68,68,.8);opacity:1;}
+    .screen-glow.green{box-shadow:inset 0 0 50px 15px rgba(34,197,94,.8);opacity:1;}
+    .screen-glow.yellow{box-shadow:inset 0 0 55px 18px rgba(234,179,8,.85);opacity:1;}
+    .screen-glow.purple{box-shadow:inset 0 0 65px 20px rgba(217,70,239,.9);opacity:1;}
+    .screen-glow.fade-out{opacity:0;transition:opacity .5s ease-out;}
+    .input-area{background:var(--card);border-bottom:1px solid var(--border);padding:12px 14px;flex-shrink:0;z-index:10;}
+    .main{flex:1;overflow-y:auto;padding:12px 14px 20px;-webkit-overflow-scrolling:touch;}
+    .num-pos{color:#ef4444;}.num-neg{color:#22c55e;}.num-zero{color:var(--text);}.num-fuchsia{color:var(--fuchsia);}.num-yellow{color:var(--yellow);}
+    .chart-area{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px 10px 10px;margin-bottom:12px;}
+    .chart-area.hidden{display:none;}
+    .chart-item+.chart-item{margin-top:6px;}
+    .chart-item-title{font-size:10px;color:var(--muted);margin-bottom:2px;padding-left:2px;}
+    .chart-canvas{display:block;width:100%;height:calc(80px * var(--chart-zoom, 1));}
+    .chart-area.mode-single .chart-canvas{height:calc(180px * var(--chart-zoom, 1));}
+    .lu-display{display:none;padding:6px 4px;overflow-x:auto;-webkit-overflow-scrolling:touch;min-height:40px;}
+    .chart-area.lu-mode .lu-display{display:block;}
+    .chart-area.lu-mode .chart-toolbar,.chart-area.lu-mode .chart-item{display:none!important;}
+    .lu-grid{display:grid;gap:0;align-items:center;justify-items:center;width:max-content;}
+    .lu-cell{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:11px;font-weight:700;width:10px;height:14px;display:flex;align-items:center;justify-content:center;line-height:1;}
+    .lu-red{color:#ef4444;}.lu-green{color:#22c55e;}.lu-empty{color:transparent;}
+    .chart-toolbar{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:6px;}
+    .zoom-btn,.zoom-label-btn{background:#2a2a2a;border:1px solid var(--border);color:var(--text);border-radius:8px;cursor:pointer;padding:0;user-select:none;transition:opacity .15s,transform .1s,background-color .15s;}
+    .zoom-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;line-height:1;}
+    .zoom-label-btn{min-width:48px;height:28px;font-size:11px;font-weight:600;color:var(--muted);font-family:"SF Mono",Menlo,Consolas,monospace;letter-spacing:.3px;}
+    .zoom-btn:active,.zoom-label-btn:active{transform:scale(.94);}
+    .zoom-btn:disabled{opacity:.35;cursor:not-allowed;}
+    .zoom-btn:hover,.zoom-label-btn:hover{background:#333;}
+    .chart-toolbar.unmatched-toolbar{justify-content:space-between;align-items:center;gap:8px;}
+    .zoom-group{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+    .unmatched-stats{display:flex;align-items:center;gap:10px;min-height:28px;min-width:0;flex:1;font-family:"SF Mono",Menlo,Consolas,monospace;font-size:13px;font-weight:700;white-space:nowrap;overflow-x:auto;overflow-y:hidden;padding-right:4px;-webkit-overflow-scrolling:touch;}
+    .unmatched-stats .stats-item{display:inline-flex;align-items:center;flex-shrink:0;}
+    .unmatched-stats .stats-sep{color:var(--muted);margin:0 1px;font-weight:400;}
+    .unmatched-preview-wrap{position:relative;flex-shrink:0;height:28px;min-width:116px;display:flex;align-items:center;justify-content:flex-end;}
+    .unmatched-preview-wrap .zoom-group{position:absolute;right:0;top:50%;transform:translateY(-50%);}
+    .unmatched-preview{position:absolute;right:0;top:50%;transform:translateY(-50%);display:none;flex-direction:column;justify-content:center;align-items:flex-end;gap:2px;padding:3px 6px;background:rgba(26,26,26,.98);border:1px solid var(--border);border-radius:8px;font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12px;font-weight:700;line-height:1.1;white-space:nowrap;z-index:2;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.45);}
+    .unmatched-preview.show{display:flex;}
+    .preview-row{display:flex;align-items:center;gap:4px;}
+    .preview-row::before{content:'';width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+    .preview-row.win-row::before{background:#ef4444;}
+    .preview-row.lose-row::before{background:#22c55e;}
+    .preview-sep{color:var(--muted);}
+    .float-area{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:12px;}
+    .float-area.hidden{display:none;}
+    .float-area .float-row{font-family:"SF Mono","Menlo","Consolas",monospace;font-size:13px;line-height:1.8;white-space:nowrap;overflow-x:auto;color:var(--text);}
+    .unmatched-area{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px 12px 10px;margin-bottom:12px;}
+    .unmatched-area.hidden{display:none;}
+    .unmatched-list{display:flex;flex-wrap:wrap;gap:calc(6px * var(--unmatched-zoom, 1));font-family:"SF Mono",Menlo,Consolas,monospace;font-size:calc(15px * var(--unmatched-zoom, 1));line-height:1.25;max-height:calc(109px * var(--unmatched-zoom, 1));overflow-y:auto;-webkit-overflow-scrolling:touch;}
+    .unmatched-list span{background:#2a2a2a;padding:calc(2px * var(--unmatched-zoom, 1)) calc(8px * var(--unmatched-zoom, 1));border-radius:4px;}
+    .unmatched-list span.unmatched-empty{background:transparent;padding:0;font-size:12px;color:var(--muted);}
+    .recent-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:12px;}
+    .recent-list{display:flex;flex-wrap:wrap;gap:3px;font-family:"SF Mono",Menlo,Consolas,monospace;font-size:11px;font-weight:600;letter-spacing:0;min-height:20px;align-items:center;}
+    .recent-list .win{color:#ef4444;background:rgba(239,68,68,.15);padding:1px 4px;border-radius:4px;}
+    .recent-list .lose{color:#22c55e;background:rgba(34,197,94,.15);padding:1px 4px;border-radius:4px;}
+    .recent-list .empty{color:var(--muted);font-size:12px;font-weight:400;}
+    .output-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 10px;margin-bottom:14px;min-height:320px;}
+    .output-grid{display:flex;width:100%;font-family:"SF Mono","Menlo","Consolas","PingFang SC",monospace;font-size:clamp(11px,2.8vw,14px);line-height:1.6;}
+    .output-col{flex:1;min-width:0;padding:0 6px;display:flex;flex-direction:column;}
+    .output-col:first-child{padding-left:0;}.output-col:last-child{padding-right:0;}
+    .output-col:not(:last-child){border-right:2px solid var(--orange);}
+    .output-row{display:flex;justify-content:space-between;white-space:nowrap;margin-bottom:2px;}
+    .output-row .lbl{color:var(--muted);font-weight:normal;}
+    .output-row .val{font-weight:700;text-align:right;margin-left:4px;}
+    .output-row .val.val-large{font-size:1.15em;font-weight:900;}
+    
+    body.hide-ben .ben-balance-row{display:none!important;}
+    
+    body.hide-labels .main{display:block;overflow-y:auto;padding:12px 14px 20px;}
+    body.hide-labels .output-card{display:flex;flex-direction:column;min-height:calc(100dvh - 200px);margin-bottom:14px;padding:8px 4px;}
+    body.hide-labels .output-grid{flex:1;display:flex;flex-direction:row;width:100%;line-height:1.15;}
+    body.hide-labels .output-col{flex:1;display:flex;flex-direction:column;justify-content:space-evenly;padding:0 4px;}
+    body.hide-labels .output-row{display:flex;justify-content:center;align-items:center;margin-bottom:0;padding:0.8dvh 0;}
+    body.hide-labels .output-row .lbl{display:none;}
+    body.hide-labels .output-row .val{flex:1;text-align:center;font-size:clamp(13px,2.2dvh,22px);font-weight:800;margin-left:0;line-height:1.15;overflow:hidden;white-space:nowrap;}
+    body.hide-labels .output-row .val.val-large{font-size:clamp(16px,2.6dvh,26px);font-weight:900;}
+    
+    body.hide-labels .output-row .val.val-underline-orange{text-decoration:underline;text-decoration-color:#ffa500;text-decoration-thickness:3px;text-underline-offset:3px;font-size:clamp(15px,2.4dvh,24px)!important;}
+    body.hide-labels .output-row .val.val-underline-purple{text-decoration:underline;text-decoration-color:#ff00ff;text-decoration-thickness:3px;text-underline-offset:3px;font-size:clamp(15px,2.4dvh,24px)!important;}
+    body.hide-labels .output-row .val.val-underline-yellow{text-decoration:underline;text-decoration-color:#ffff00;text-decoration-thickness:3px;text-underline-offset:3px;font-size:clamp(15px,2.4dvh,24px)!important;}
+    body.hide-labels .output-row .val.val-underline-wave{text-decoration:underline;text-decoration-style:wavy;text-decoration-color:#00ffff;text-decoration-thickness:3px;text-underline-offset:3px;font-size:clamp(15px,2.4dvh,24px)!important;}
+    
+    body.hide-labels .output-row .val.val-large[class*="val-underline-"]{font-size:clamp(18px,2.8dvh,28px)!important;}
+    
+    body.hide-labels.show-micro .output-row{flex-direction:column;justify-content:center;align-items:center;padding:0;}
+    body.hide-labels.show-micro .output-row .lbl{
+      display:block;flex:none;font-size:clamp(8px,1.1dvh,12px);
+      margin-bottom:2px;line-height:1;white-space:nowrap;font-weight:500;
+    }
+    body.hide-labels.show-micro .output-row .val{flex:none;width:100%;font-size:clamp(12px,2dvh,20px);line-height:1.1;}
+    body.hide-labels.show-micro .output-row .val.val-large{font-size:clamp(14px,2.3dvh,23px);}
+    
+    body.hide-labels.show-micro .output-row .lbl.lbl-glow{
+      font-size:clamp(10px,1.3dvh,15px)!important;
+      font-weight:800;
+    }
+    
+    .val.num-pos{color:#ef4444;}.val.num-neg{color:#22c55e;}.val.num-zero{color:var(--text);}.val.num-fuchsia{color:var(--fuchsia);}.val.num-yellow{color:var(--yellow);}.val.num-orange{color:var(--orange);}.val.num-green{color:var(--green);}
+    
+    /* 明细表默认紧凑行高 */
+    .recent-detail{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:0 12px;margin-bottom:14px;max-height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch;font-family:"SF Mono",Menlo,Consolas,monospace;font-size:13px;line-height:22px; position: relative;}
+    .recent-detail .detail-row{display:grid;grid-template-columns:30px 46px 46px 1fr 1fr 20px;gap:4px;align-items:center;height:30px;padding-top:4px;padding-bottom:4px;width:100%;position:relative;}
+    
+    /* 仅在紫线上面那一行增加底部间距 */
+    .recent-detail .detail-row.tian-spacing-row { margin-bottom: 24px; }
+
+    /* 黄线放在行间留白。 */
+    .recent-detail .detail-row.zero-lx-line::before{content:'';position:absolute;left:-12px;right:-12px;top:-1px;height:2px;background-color:#eab308;z-index:1;}
+    
+    /* 紫线放到行的顶部边缘 */
+    .recent-detail .detail-row.tian-clear-line::before{content:'';position:absolute;left:-12px;right:-12px;top:-3px;height:4px;background-color:var(--fuchsia);z-index:4;}
+    
+    /* 日期标签悬浮在紫线上方，因为上一行有 24px 的空白区，绝不会遮挡文字 */
+    .recent-detail .tian-date-label {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        top: -16px;
+        font-size: 10px;
+        font-weight: bold;
+        color: #fff;
+        background: var(--card);
+        border: 1px solid var(--fuchsia);
+        padding: 0px 6px;
+        border-radius: 4px;
+        z-index: 10;
+        line-height: 1.1;
+        pointer-events: none;
+        white-space: nowrap;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+
+    /* 橙线放在行间留白中央，不遮数字。 */
+    .recent-detail .detail-row.tian-zero-line::after{content:'';position:absolute;left:0;right:0;top:-1.5px;height:3px;background-color:var(--orange);z-index:3;pointer-events:none;}
+    
+    .recent-detail .d-idx{text-align:center;color:var(--muted);font-size:11px;}
+    .recent-detail .d-tl{text-align:center;color:var(--fuchsia);font-size:12px;}
+    .recent-detail .d-tz{text-align:center;color:var(--fuchsia);font-size:12px;}
+    .recent-detail .d-tl.pos,.recent-detail .d-tz.pos{color:#ef4444;}
+    .recent-detail .d-tl.neg,.recent-detail .d-tz.neg{color:#22c55e;}
+    .recent-detail .d-in{text-align:center;color:var(--text);}
+    .recent-detail .d-f{text-align:center;color:var(--text);}
+    .recent-detail .d-in.pos,.recent-detail .d-f.pos{color:#ef4444;}
+    .recent-detail .d-in.neg,.recent-detail .d-f.neg{color:#22c55e;}
+    .recent-detail .d-sign{text-align:center;font-weight:700;}
+    .recent-detail .d-sign.pos{color:#ef4444;}
+    .recent-detail .d-sign.neg{color:#22c55e;}
+    .recent-detail .detail-empty{color:var(--muted);font-size:12px;text-align:center;padding:6px 0;}
+    body.view-detail-full .chart-area,body.view-detail-full .float-area,body.view-detail-full .unmatched-area,body.view-detail-full .recent-box,body.view-detail-full #checkArea,body.view-detail-full .output-card{display:none!important;}
+    body.view-detail-full .main{display:flex;flex-direction:column;overflow:hidden;padding:12px 14px 20px;}
+    body.view-detail-full .recent-detail{flex:1;height:0;max-height:none!important;margin-bottom:0;}
+    body.view-output-full .chart-area,body.view-output-full .float-area,body.view-output-full .unmatched-area,body.view-output-full .recent-box,body.view-output-full #checkArea,body.view-output-full .recent-detail{display:none!important;}
+    body.view-output-full .main{display:flex;flex-direction:column;overflow:hidden;padding:12px 14px 20px;}
+    body.view-output-full .output-card{flex:1;height:0;min-height:0!important;margin-bottom:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+    body.view-chart-full .float-area,body.view-chart-full .unmatched-area,body.view-chart-full .recent-box,body.view-chart-full #checkArea,body.view-chart-full .output-card,body.view-chart-full .recent-detail{display:none!important;}
+    body.view-chart-full .main{padding:12px 14px 20px;overflow-y:auto!important;}
+    body.view-chart-full .chart-area{display:block;margin-bottom:0;}
+    body.view-chart-full .chart-item{display:block;margin-bottom:16px;}
+    body.view-chart-full .chart-canvas{height:calc(32vh * var(--chart-zoom, 1))!important;}
+    body.view-chart-full .chart-area.mode-single .chart-canvas{height:calc(75vh * var(--chart-zoom, 1))!important;}
+    .check-msg{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#94a3b8;}
+    .check-msg.error{background:#450a0a;border-color:#7f1d1d;color:#fca5a5;}
+    .check-msg.ok{background:#052e16;border-color:#166534;color:#86efac;}
+    .input-row{display:flex;gap:8px;margin-bottom:10px;align-items:center;}
+    #numInput{flex:1;min-width:0;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;height:40px;padding:0 10px;outline:none;text-align:center;font-weight:500;transition:border-color .2s,color .2s,background-color .2s;}
+    #numInput:focus{border-color:var(--accent);}
+    @keyframes shake{0%{transform:translateX(0);}25%{transform:translateX(-6px);}50%{transform:translateX(6px);}75%{transform:translateX(-6px);}100%{transform:translateX(0);}}
+    #numInput.error{border-color:var(--yellow);color:var(--yellow);background-color:rgba(234,179,8,.12);animation:shake .3s ease;}
+    .btn{border:none;border-radius:10px;font-size:15px;font-weight:600;padding:12px 16px;cursor:pointer;transition:opacity .15s,transform .1s;user-select:none;}
+    .btn:active{transform:scale(.96);opacity:.85;}
+    .btn-primary{background:var(--accent);color:#fff;flex:0 0 auto;min-width:72px;}
+    .btn-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+    .btn-row .btn{font-size:13px;padding:10px 6px;}
+    .btn-secondary{background:#2a2a2a;color:var(--text);font-size:13px;padding:10px 6px;}
+    .btn-danger{background:#3f1a1a;color:#fca5a5;}
+    .btn-success{background:#1a3f2a;color:#86efac;}
+    .btn-warn{background:#3f351a;color:#fde68a;}
+    .btn-redo{background:#1e2a3f;color:#93c5fd;}
+    .btn-chart{background:#1a2f3f;color:#7dd3fc;}
+    .btn-panel{background:#2a1f3f;color:#c4b5fd;}
+    .btn-panel.active{background:#4c1d95;color:#e9d5ff;}
+    .btn-fulledit{background:#1f3a2a;color:#86efac;}
+    .btn-clear{background:#3f1a1a;color:#fca5a5;font-size:12px;padding:8px 6px;}
+    .btn-tian{background:#2a1f3f;color:#e9d5ff;}
+    .btn-detail{background:#2a2a2a;color:#fde68a;font-weight:700;}
+    .btn-snap{background:#1f2a3f;color:#93c5fd;}
+    .btn-unmatched{background:#1f2a3f;color:#93c5fd;font-weight:700;}
+    .btn-hide-label{background:#2a1f3f;color:#c4b5fd;font-weight:700;}
+    .btn-hide-ben{background:#1e2a3f;color:#93c5fd;font-weight:700;}
+    .btn-micro{background:#3f2a1f;color:#fdba74;font-weight:700;}
+    .btn-lu{background:#3f2a1f;color:#fdba74;flex:0 0 auto;height:40px;padding:0 16px;font-size:14px;border-radius:8px;}
+    .btn-lu.active{background:#7c2d12;color:#fed7aa;}
+    #submitBtn{flex:0 0 auto;height:40px;padding:0 16px;font-size:14px;border-radius:8px;min-width:62px;}
+    
+    .toolbar-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:10px;}
+    .toolbar-grid .btn{font-size:12px;padding:9px 6px;}
+    
+    .toolbar-grid.panel-hidden{grid-template-columns:repeat(6,1fr);gap:4px;}
+    .toolbar-grid.panel-hidden .col-hide{display:none!important;}
+    .toolbar-grid.panel-hidden .btn{font-size:11px;padding:8px 2px;}
+    
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-end;justify-content:center;z-index:100;padding:16px;}
+    .modal-overlay.show{display:flex;}
+    .modal{background:var(--card);border-radius:16px 16px 12px 12px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;padding:18px 16px 20px;-webkit-overflow-scrolling:touch;}
+    .modal h3{font-size:16px;margin-bottom:12px;text-align:center;}
+    .modal p{font-size:13px;color:var(--muted);margin-bottom:14px;text-align:center;line-height:1.5;}
+    .modal .btn-row{grid-template-columns:1fr 1fr;}
+    .modal .btn-row .btn{font-size:13px;padding:10px 6px;}
+    .toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(30,30,30,.95);color:#fff;padding:12px 20px;border-radius:10px;font-size:14px;z-index:200;opacity:0;visibility:hidden;transition:opacity .3s ease,visibility .3s ease;pointer-events:none;border:1px solid var(--border);text-align:center;}
+    .toast.show{opacity:1;visibility:visible;}
+    .toast.warn-big{font-size:18px;font-weight:800;letter-spacing:1px;color:#eab308;background:rgba(38,31,4,.97);border:2px solid rgba(234,179,8,.75);border-radius:14px;padding:18px 34px;box-shadow:0 0 26px rgba(234,179,8,.38),0 10px 30px rgba(0,0,0,.35);}
+    .toast.bubble{background:#e0f2fe;color:#0c4a6e;padding:30px 50px;border-radius:18px;font-size:38px;font-weight:bold;border:2px solid #bae6fd;box-shadow:0 10px 30px rgba(0,0,0,.3);}
+    .toast.bubble span.pos{color:#ef4444;font-size:41px;}
+    .toast.bubble span.neg{color:#22c55e;font-size:41px;}
+    .count-badge{display:inline-block;background:#333;border-radius:6px;padding:2px 7px;font-size:11px;color:var(--muted);margin-left:6px;}
+    #fileInput{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;z-index:-1;}
+    .modal textarea{width:100%;height:140px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px;font-size:12px;font-family:monospace;resize:vertical;margin-bottom:12px;}
+    .modal .tip{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5;}
+    .state-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+    .state-edit-item{display:flex;flex-direction:column;gap:4px;}
+    .state-edit-item label{font-size:11px;color:var(--muted);padding-left:2px;}
+    .state-edit-item input{background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-size:14px;text-align:center;outline:none;width:100%;}
+    .state-edit-item input:focus{border-color:var(--accent);}
+    .edit-section-title{display:flex;align-items:center;font-size:12px;color:var(--muted);margin:12px 0 8px;padding-left:2px;font-weight:600;}
+    .detail-edit-list{max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;padding:8px;margin-bottom:10px;background:#151515;}
+    .detail-edit-row{display:grid;grid-template-columns:42px 1fr;gap:8px;align-items:center;margin-bottom:6px;}
+    .detail-edit-row:last-child{margin-bottom:0;}
+    .detail-edit-row .idx{font-size:11px;color:var(--muted);font-family:"SF Mono",Menlo,Consolas,monospace;text-align:right;}
+    .detail-edit-row input{background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-size:13px;text-align:center;outline:none;width:100%;font-family:"SF Mono",Menlo,Consolas,monospace;}
+    .detail-edit-row input.pos{color:#ef4444;}
+    .detail-edit-row input.neg{color:#22c55e;}
+    .detail-edit-row input:focus{border-color:var(--accent);}
+    .detail-edit-empty{color:var(--muted);font-size:12px;text-align:center;padding:8px 0;}
+    .detail-edit-more{color:var(--muted);font-size:11px;text-align:center;padding:4px 0 8px;}
+    .um-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+    .um-tools .btn{font-size:12px;padding:8px 6px;}
+    .um-tools-clear{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+    .range-input-area{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;color:var(--muted);}
+    .range-input-area input{flex:1;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px;font-size:14px;text-align:center;outline:none;}
+    .range-input-area input:focus{border-color:var(--accent);}
+    .tian-snap-list{max-height:320px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;padding:6px;margin-bottom:12px;background:#151515;}
+    .tian-snap-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 6px;border-bottom:1px solid #222;}
+    .tian-snap-row:last-child{border-bottom:none;}
+    .tian-snap-info{min-width:0;}
+    .tian-snap-time{font-size:12px;color:var(--text);font-family:"SF Mono",Menlo,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .tian-snap-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+    .tian-snap-row .btn{font-size:11px;padding:6px 10px;}
+    .tian-snap-row .btn.active{background:#4c1d95;color:#e9d5ff;}
+    
+#bacModal{position:fixed;inset:0;z-index:10020;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;padding:12px;}#bacModal.bac-open{display:flex;}
+#bacModal .bac-box{width:min(100%,540px);max-height:94dvh;overflow-y:auto;background:#191919;border:1px solid #444;border-radius:14px;padding:16px;color:#eee;font-size:14px;line-height:1.6;}
+#bacModal h2{font-size:19px;margin-bottom:8px;}#bacModal h3{font-size:15px;margin:14px 0 6px;}#bacModal input,#bacModal textarea{width:100%;background:#252525;color:#fff;border:1px solid #555;border-radius:7px;padding:10px;font-size:16px;min-width:0;}#bacModal label{display:block;margin:8px 0;}
+#bacModal .bac-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}#bacModal button{min-height:38px;cursor:pointer;}#bacModal .bac-note{font-size:12px;color:#bbb;}#bacStatus{white-space:pre-wrap;color:#fbbf24;margin-top:8px;}#bacResult,#bacAnalysis{background:#102438;border-radius:9px;padding:12px;white-space:pre-wrap;margin-top:12px;font-variant-numeric:tabular-nums;}
+#bacCounts{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:8px;}#bacCounts span{background:#272727;border-radius:5px;text-align:center;padding:5px 1px;font-size:12px;}#bacHistory{max-height:180px;overflow:auto;padding-left:24px;font-size:12px;}#bacHistory li{margin:5px 0;}#bacShoeJson{min-height:100px;}
+#bacModal .bac-table-wrap{overflow-x:auto;}#bacEorTable{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px;font-variant-numeric:tabular-nums;}#bacEorTable th,#bacEorTable td{border:1px solid #444;padding:6px 4px;text-align:center;}#bacEorTable .bac-up{color:#fbbf24;}#bacEorTable .bac-down{color:#93c5fd;}
+#bacEVNotice{padding:12px;border:1px solid #666;border-radius:9px;margin:10px 0;white-space:pre-wrap;font-size:14px;background:#272727;}#bacEVNotice[data-state="positive"]{background:#123823;border:2px solid #4ade80;color:#dcfce7;box-shadow:0 0 12px #22c55e55;}#bacEVNotice[data-state="negative"]{background:#332617;color:#fde68a;}#bacOpen{position:relative;}#bacOpen.bac-positive{box-shadow:0 0 0 2px #4ade80,0 0 12px #22c55e88;}#bacOpen.bac-positive::after{content:'+EV';position:absolute;right:-3px;top:-7px;background:#166534;color:#fff;border:1px solid #86efac;border-radius:4px;font-size:9px;line-height:14px;padding:0 2px;pointer-events:none;}
+#bacPositiveToast{position:fixed;top:max(14px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(92vw,480px);z-index:10040;padding:14px;background:#123823;color:#dcfce7;border:2px solid #4ade80;border-radius:10px;font-size:14px;line-height:1.5;text-align:left;white-space:pre-wrap;box-shadow:0 4px 20px #0009;}#bacPositiveToast[hidden]{display:none!important;}
+
+</style>
+  </head>
+  <body>
+    <div class="screen-glow" id="screenGlow">
+    </div>
+    <div class="input-area">
+      <div class="input-row">
+        <button class="btn btn-lu" id="luBtn">路</button>
+        <input type="text" id="numInput" inputmode="decimal" placeholder="输入数值" autocomplete="off" enterkeyhint="done" />
+        <button class="btn btn-primary" id="submitBtn">确认</button>
+      </div>
+      <div class="input-row ben-balance-row" style="margin-bottom:8px;gap:8px;">
+        <span style="font-size:14px;color:var(--text);flex-shrink:0;">本：</span>
+        <input type="number" id="benInput" maxlength="5" min="0" max="99999" style="flex:0 0 80px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;height:36px;padding:0 10px;outline:none;text-align:center;" placeholder="0" />
+        <span style="font-size:14px;color:var(--text);margin-left:auto;flex-shrink:0;">洞：</span>
+        <input type="number" id="dongInput" maxlength="5" min="0" style="flex:0 0 80px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;height:36px;padding:0 10px;outline:none;text-align:center;" placeholder="100" />
+      </div>
+      <div class="toolbar-grid" id="toolbarGrid">
+        <button class="btn btn-primary col-hide" id="bacOpen">牌</button>
+        <button class="btn btn-warn" id="undoBtn">撤</button>
+        <button class="btn btn-redo" id="redoBtn">重</button>
+        <button class="btn btn-fulledit col-hide" id="fullEditBtn">全编辑</button>
+        <button class="btn btn-hide-ben col-hide" id="hideBenBtn">隐本</button>
+        <button class="btn btn-secondary col-hide" id="exportBtn">导数据</button>
+        <button class="btn btn-secondary col-hide" id="exportDetailBtn">导明细</button>
+        <button class="btn btn-secondary col-hide" id="importBtn">导入</button>
+        <button class="btn btn-chart col-hide" id="chartBtn">隐藏</button>
+        <button class="btn btn-danger col-hide" id="resetBtn">清空</button>
+        <button class="btn btn-tian col-hide" id="tianClearBtn">天清零</button>
+        <button class="btn btn-snap col-hide" id="tianSnapBtn">天快照</button>
+        <button class="btn btn-hide-label col-hide" id="hideLabelBtn">隐名</button>
+        <button class="btn btn-micro" id="microBtn">显微</button>
+        <button class="btn btn-detail" id="detailBtn">明细</button>
+        <button class="btn btn-unmatched" id="unmatchedBtn">未消</button>
+        <button class="btn btn-panel" id="panelBtn">版</button>
+      </div>
+    </div>
+    <div class="main">
+      <div class="chart-area" id="chartArea">
+        <div class="lu-display" id="luDisplay">
+        </div>
+        <div class="chart-toolbar">
+          <button class="zoom-btn" id="zoomOutBtn" aria-label="缩小图表" title="缩小">−</button>
+          <button class="zoom-label-btn" id="zoomLabelBtn" title="点击重置为 100%">100%</button>
+          <button class="zoom-btn" id="zoomInBtn" aria-label="放大图表" title="放大">+</button>
+        </div>
+        <div class="chart-item" id="chartItemA">
+          <div class="chart-item-title">盈</div>
+          <canvas id="chartA" class="chart-canvas">
+          </canvas>
+        </div>
+        <div class="chart-item" id="chartItemB">
+          <div class="chart-item-title">胜</div>
+          <canvas id="chartB" class="chart-canvas">
+          </canvas>
+        </div>
+        <div class="chart-item" id="chartItemC">
+          <div class="chart-item-title">今盈</div>
+          <canvas id="chartC" class="chart-canvas">
+          </canvas>
+        </div>
+        <div class="chart-item" id="chartItemD">
+          <div class="chart-item-title">今胜</div>
+          <canvas id="chartD" class="chart-canvas">
+          </canvas>
+        </div>
+      </div>
+      <div class="float-area hidden" id="floatArea">
+      </div>
+      <div class="unmatched-area hidden" id="unmatchedArea">
+        <div class="chart-toolbar unmatched-toolbar">
+          <div class="unmatched-stats" id="unmatchedStats">
+          </div>
+          <div class="unmatched-preview-wrap">
+            <div class="zoom-group" id="unmatchedZoomGroup">
+              <button class="zoom-btn" id="unmatchedZoomOutBtn" aria-label="缩小" title="缩小">−</button>
+              <button class="zoom-label-btn" id="unmatchedZoomLabelBtn" title="重置">100%</button>
+              <button class="zoom-btn" id="unmatchedZoomInBtn" aria-label="放大" title="放大">+</button>
+            </div>
+            <div class="unmatched-preview" id="unmatchedPreview">
+            </div>
+          </div>
+        </div>
+        <div class="unmatched-list" id="unmatchedList">
+        </div>
+      </div>
+      <div class="recent-box">
+        <div class="recent-list" id="recentList">
+          <span class="empty">暂无记录</span>
+        </div>
+      </div>
+      <div id="checkArea">
+      </div>
+      <div class="output-card" id="output">
+      </div>
+      <div class="recent-detail" id="recentDetail">
+        <div class="detail-empty">暂无记录</div>
+      </div>
+      <input type="file" id="fileInput" accept=".json,application/json,text/plain,.txt" />
+      <div class="modal-overlay" id="exportModal">
+        <div class="modal">
+          <h3>导出数据</h3>
+          <div class="tip">如果手机没有弹出下载，请用下面「复制内容」，把文字保存到备忘录或文件里。</div>
+          <textarea id="exportText" readonly>
+          </textarea>
+          <div class="btn-row" style="margin-bottom:8px">
+            <button class="btn btn-secondary" id="copyExport">复制内容</button>
+            <button class="btn btn-primary" id="doExport">尝试下载文件</button>
+          </div>
+          <button class="btn btn-secondary" id="closeExport" style="width:100%">关闭</button>
+        </div>
+      </div>
+      <div class="modal-overlay" id="exportDetailModal">
+        <div class="modal">
+          <h3>导出明细（适用于WPS）</h3>
+          <div class="tip">数据已分为两列：符号和数值。可输入指定序号范围，点击「提取」后，然后分别复制或下载。</div>
+          <div class="range-input-area">
+            <span>从</span>
+            <input type="number" id="exportRangeStart" value="1" min="1">
+            <span>到</span>
+            <input type="number" id="exportRangeEnd" value="1" min="1">
+            <button class="btn btn-secondary" id="applyRangeBtn" style="padding:8px 14px;font-size:13px;">提取</button>
+          </div>
+          <div class="edit-section-title">符号列</div>
+          <textarea id="exportDetailSymbols" readonly style="height:120px;margin-bottom:8px;">
+          </textarea>
+          <div class="btn-row" style="margin-bottom:12px;grid-template-columns:1fr 1fr;">
+            <button class="btn btn-secondary" id="copyExportSymbols">复制符号</button>
+            <button class="btn btn-primary" id="doExportSymbols">下载符号</button>
+          </div>
+          <div class="edit-section-title">数值列</div>
+          <textarea id="exportDetailValues" readonly style="height:120px;margin-bottom:8px;">
+          </textarea>
+          <div class="btn-row" style="margin-bottom:12px;grid-template-columns:1fr 1fr;">
+            <button class="btn btn-secondary" id="copyExportValues">复制数值</button>
+            <button class="btn btn-primary" id="doExportValues">下载数值</button>
+          </div>
+          <button class="btn btn-secondary" id="closeExportDetail" style="width:100%">关闭</button>
+        </div>
+      </div>
+      <div class="modal-overlay" id="importModal">
+        <div class="modal">
+          <h3>导入数据</h3>
+          <div class="tip">方式一：点下面按钮选择之前导出的 .json 文件<br>方式二：把备份内容粘贴到下面文本框，再点「从文本导入」</div>
+          <button class="btn btn-primary" id="pickFileBtn" style="width:100%;margin-bottom:12px">选择本地文件</button>
+          <textarea id="importText" placeholder="或者把备份的 JSON 内容粘贴到这里...">
+          </textarea>
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="closeImport">取消</button>
+            <button class="btn btn-primary" id="doImportText">从文本导入</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-overlay" id="freeEditModal">
+        <div class="modal">
+          <h3>全编辑（全部项目）</h3>
+          <div class="tip">可编辑所有状态数值、最近 10 条明细记录、以及未抵消区域的数据与码差。<b>不做任何反推</b>。保存后作为新起点，<b>原有记录全部保留</b>，之后新输入在此基础上继续累积。未抵消区域保存后作为<b>起始池</b>，新输入会在此池基础上按规则继续抵消。<br>注：庄最多 / 闲最多 / 回撤 / 庄连 / 闲连 / 当庄 / 当闲 / 最盈 / 最亏 为历史累计量，若不动则保留当前值。</div>
+          <div class="state-edit-grid" id="freeEditGrid">
+          </div>
+          <div class="edit-section-title">明细记录（最近 10 条）<span class="count-badge" id="detailCountBadge">0</span>
+        </div>
+        <div class="detail-edit-list" id="detailEditList">
+        </div>
+        <div class="edit-section-title">未抵消区域<span class="count-badge" id="umCountBadge">0</span>
+      </div>
+      <div class="detail-edit-list" id="umEditList">
+      </div>
+      <div class="um-tools">
+        <button class="btn btn-secondary" id="umAddBtn">＋ 添加一项</button>
+        <button class="btn btn-secondary" id="umDelBtn">－ 删除最后一项</button>
+      </div>
+      <div class="um-tools-clear">
+        <button class="btn btn-clear" id="umClearBtn">清除未抵消全部</button>
+        <button class="btn btn-clear" id="detailClearBtn">明细保护说明</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="closeFreeEdit">取消</button>
+        <button class="btn btn-primary" id="saveFreeEdit">保存</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="tianSnapModal">
+    <div class="modal">
+      <h3>天清零快照</h3>
+      <div class="tip">每次点击「天清零」都会自动保存一份快照（含时间戳）。<br>快照保存了该时刻的完整今胜 / 今天龙明细，可随时恢复。<br>
+        <b>恢复快照不会删除任何快照</b>，所有快照永久保留，可反复调用。<br>删除快照只影响历史明细的补全显示（已归档的明细不受影响）。</div>
+        <div class="tian-snap-list" id="tianSnapList">
+        </div>
+        <button class="btn btn-secondary" id="closeTianSnap" style="width:100%">关闭</button>
+      </div>
+    </div>
+    <div class="toast" id="toast">
+    </div>
+  </div>
+  <script>
+    const $=id=>document.getElementById(id), $$=sel=>document.querySelectorAll(sel);
+    const vibrate=()=>{navigator.vibrate&&navigator.vibrate(30)};
+    const bind=(id,fn)=>$(id).addEventListener("click",()=>{vibrate();fn()});
+    const bindClose=(btn,mod)=>bind(btn,()=>$(mod).classList.remove("show"));
+    const SYMBOL_WIN="√",SYMBOL_LOSE="×";
+    let detailMarks=[],inputs=[],outputHistory=[],redoStack=[],previewData=null,lxHistory=[],tianDetailData=[],detailTianArchive=[],tianSnapshots=[],unmatchedOverride=null,detailCleared=false,tianStartIndex=0,tianClearMark=0,luMode=false,ben=0,hideLabels=false,hideBen=false,showMicroLabels=false,viewState=0,savedChartMode=null,umEditVals=[],detailLock=false,chartRaf=null,audioCtx=null,beepOsc=null,beepGain=null,lastTouch=0,tianClearPositions=[];
+    let chartMode=7,chartZoom=1,unmatchedZoom=1,panelHidden=false;
+    let dongBase = 100;
+    let tianBase = { sheng:0, ri:0, f:0, fan:0, dong:0, strength:0 };
+    const CHART_MODE_LABELS=["隐藏","四图全显","盈","胜","今盈","今胜","浮动","未抵消"],ZOOM_MIN=.5,ZOOM_MAX=3,ZOOM_STEP=1.25,UNMATCHED_ZOOM_MIN=.5,UNMATCHED_ZOOM_MAX=3,UNMATCHED_ZOOM_STEP=1.25,RECENT_LIMIT=38,DETAIL_ROW_H=30,AUTO_EXPORT_COUNT=120,STORAGE_KEY="shengri_app_v5";
+    const SPECIAL_FORCE_MAP={5:2.25,10:7,15:11.75,20:16.5,25:21.25,30:26,35:30.75,40:35.5,45:40.25};
+    const getBaseState=()=>({sheng:0,ri:0,dangSheng:0,dangRi:0,daSheng:0,daRi:0,maxShengDuo:0,maxRiDuo:0,f:0,tf:0,fan:0,dong:0,lastSign:0,maxZuiLi:0,minZuiPa:0,maxHuiChe:0,_freeze:false,_frozenAt:0,ma:0,longxia:0,yingSheng:0,pingLi:0,shengPct:0,maPing:0,zhongLi:0,zhongPingLi:0,tianF1:0});
+    const getDefaultTian=()=>({tianMa:0,tianFan:0,tianDong:0,tianMaPing:0,tianYingSheng:0,tianLongxia:0,tianF:0,tianPingLi:0,tianTf:0,tianStrength:0,tianZhongLi:0,tianZhongPingLi:0,tianSheng:0,tianRi:0,tianShengPct:0});
+    let baseState=getBaseState();
+    
+    const fmtNum=(n,maxDec=1)=>{if(n===0)return"0";let s=Number(n).toFixed(maxDec);if(s.includes("."))s=s.replace(/\.?0+$/,"");return s==="-0"?"0":s};
+    const fmtSheng=n=>(n===0?0:n).toFixed(2)+"%";
+    const colorizeNumbers=text=>text.replace(/(-?\d+(?:\.\d+)?)/g,(m,ns)=>{const n=parseFloat(ns);return ns.charAt(0)==='-'||n<0?`<span class="num-neg">${ns}</span>`:`<span class="num-zero">${ns}</span>`});
+    const calcSingleForce=x=>x>0?(SPECIAL_FORCE_MAP[x]??x*.95):x;
+    const calcSingleDong=x=>x>0?calcSingleForce(x)-dongBase:x+dongBase;
+    const calcPingLiCore=(f,lx)=>{if(lx===0)return 0;let v=f/Math.abs(lx);return v<0?v/.95:v};
+    const getCls=n=>n>0?"num-pos":n<0?"num-neg":"num-zero";
+
+    function calcFloat(s,ratio){const P=s.pingLi,d=s.sheng-s.ri,f=s.f,P_up=P+Math.abs(P)*ratio,P_down=P-Math.abs(P)*ratio;let x_up=0,x_down=0;if(d+1!==0)x_up=(P_up*Math.abs(d+1)-f)/.95;if(d-1!==0)x_down=-(f-P_down*Math.abs(d-1));let winP_up=0,loseP_up=0,winP_down=0,loseP_down=0;const absUp=Math.abs(x_up);if(absUp!==0){if(d+1!==0)winP_up=(f+absUp*.95)/Math.abs(d+1);if(d-1!==0)loseP_up=(f-absUp)/Math.abs(d-1)}const absDown=Math.abs(x_down);if(absDown!==0){if(d+1!==0)winP_down=(f+absDown*.95)/Math.abs(d+1);if(d-1!==0)loseP_down=(f-absDown)/Math.abs(d-1)}return{x_up,x_down,winP_up,loseP_up,winP_down,loseP_down}}
+
+    function hasBaseData(){const b=baseState;return b.sheng!==0||b.ri!==0||b.f!==0||b.tf!==0||b.fan!==0||b.dong!==0||b.maxZuiLi!==0||b.minZuiPa!==0||b.dangSheng!==0||b.dangRi!==0||b.daSheng!==0||b.daRi!==0||b.maxShengDuo!==0||b.maxRiDuo!==0||b.maxHuiChe!==0}
+
+    function applyInputToState(st,x){if(x>0){st.sheng++;if(st.lastSign===1)st.dangSheng++;else st.dangSheng=1;st.dangRi=0;st.lastSign=1}else{st.ri++;if(st.lastSign===-1)st.dangRi++;else st.dangRi=1;st.dangSheng=0;st.lastSign=-1}st.f+=calcSingleForce(x);st.fan+=Math.abs(x);st.dong+=calcSingleDong(x);if(st.dangSheng>st.daSheng)st.daSheng=st.dangSheng;if(st.dangRi>st.daRi)st.daRi=st.dangRi;const diff=st.sheng-st.ri;if(-diff>st.maxRiDuo)st.maxRiDuo=-diff;if(diff>st.maxShengDuo)st.maxShengDuo=diff;const drawdown=st.maxShengDuo-diff;if(drawdown>st.maxHuiChe)st.maxHuiChe=drawdown;const sumFT=st.f+st.tf;if(sumFT>st.maxZuiLi)st.maxZuiLi=sumFT;if(sumFT<st.minZuiPa)st.minZuiPa=sumFT}
+
+    function calcState(seq){const b=baseState,list=seq||[],from=Math.min(b._frozenAt||0,list.length);if(b._freeze&&from>=list.length){const _f=b.f||0,_tf=b.tf||0,_lx=b.longxia||0,_zl=_f+_tf;return{ma:b.ma||0,longxia:_lx,yingSheng:b.yingSheng||0,f:_f,pingLi:b.pingLi||0,tf:_tf,shengPct:b.shengPct||0,sheng:b.sheng||0,ri:b.ri||0,dangSheng:b.dangSheng||0,dangRi:b.dangRi||0,daSheng:b.daSheng||0,daRi:b.daRi||0,maxShengDuo:b.maxShengDuo||0,maxRiDuo:b.maxRiDuo||0,maxZuiLi:b.maxZuiLi||0,minZuiPa:b.minZuiPa||0,maxHuiChe:b.maxHuiChe||0,fan:b.fan||0,dong:b.dong||0,maPing:b.maPing||0,zhongLi:_zl,zhongPingLi:_lx===0?0:_zl/Math.abs(_lx)}}const baseHas=b._freeze||hasBaseData(),st={sheng:b.sheng||0,ri:b.ri||0,dangSheng:b.dangSheng||0,dangRi:b.dangRi||0,daSheng:b.daSheng||0,daRi:b.daRi||0,maxShengDuo:b.maxShengDuo||0,maxRiDuo:b.maxRiDuo||0,f:b.f||0,tf:b.tf||0,fan:b.fan||0,dong:b.dong||0,lastSign:b.lastSign||0,maxZuiLi:baseHas?(b.maxZuiLi||0):-Infinity,minZuiPa:baseHas?(b.minZuiPa||0):Infinity,maxHuiChe:b.maxHuiChe||0};for(let i=from;i<list.length;i++)applyInputToState(st,list[i]);const ma=st.sheng+st.ri,longxia=st.sheng-st.ri,shengPct=ma===0?0:(st.sheng/ma)*100,yingSheng=ma*.0136,pingLi=calcPingLiCore(st.f,longxia),maPing=ma===0?0:(st.f+st.tf)/ma,zhongLi=st.f+st.tf,zhongPingLi=longxia===0?0:zhongLi/Math.abs(longxia);return{ma,longxia,yingSheng,f:st.f,pingLi,tf:st.tf,shengPct,sheng:st.sheng,ri:st.ri,dangSheng:st.dangSheng,dangRi:st.dangRi,daSheng:st.daSheng,daRi:st.daRi,maxShengDuo:st.maxShengDuo,maxRiDuo:st.maxRiDuo,maxZuiLi:(st.maxZuiLi===-Infinity||st.maxZuiLi===Infinity)?0:st.maxZuiLi,minZuiPa:(st.minZuiPa===-Infinity||st.minZuiPa===Infinity)?0:st.minZuiPa,maxHuiChe:st.maxHuiChe||0,fan:st.fan,dong:st.dong,maPing,zhongLi,zhongPingLi}}
+
+    function getTianState(seq,s){
+        const list=seq||[],start=Math.min(tianStartIndex,list.length),tianSeq=list.slice(start);
+        let tSheng=tianBase.sheng||0;
+        let tRi=tianBase.ri||0;
+        let tF=tianBase.f||0;
+        let tFan=tianBase.fan||0;
+        let tDong=tianBase.dong||0;
+
+        for(let x of tianSeq){
+            if(x>0){tSheng++}else{tRi++}
+            tF+=calcSingleForce(x);
+            tFan+=Math.abs(x);
+            tDong+=calcSingleDong(x);
+        }
+        const tMa=tSheng+tRi,tYingSheng=tMa*.0136,tZhongLi=tF,tShengPct=tMa===0?0:(tSheng/tMa)*100,tUm=calcUnmatchedFrom([],tianBase.strength||0,tianSeq),tStrength=tUm.strength,tianLongxia=tSheng-tRi,tianPingLi=calcPingLiCore(tF,tianLongxia),mainLongxiaFinal=s.longxia;
+        
+        return {
+            tianMa:tMa, tianFan:tFan, tianDong:tDong,
+            tianMaPing:tMa===0?0:tZhongLi/tMa,
+            tianYingSheng:tYingSheng, tianLongxia:tianLongxia,
+            tianF:tF, tianPingLi:tianPingLi, tianTf:0,
+            tianStrength:tStrength, tianZhongLi:tZhongLi,
+            tianZhongPingLi:mainLongxiaFinal===0?0:tZhongLi/Math.abs(mainLongxiaFinal),
+            tianSheng:tSheng, tianRi:tRi, tianShengPct:tShengPct
+        }
+    }
+
+    function formatOutput(s,strength,tianData){const longxiaStr=s.longxia>0?`+${s.longxia}`:String(s.longxia),shengDuoStr=s.maxShengDuo>0?`+${s.maxShengDuo}`:`+0`,riDuoStr=s.maxRiDuo>0?`-${s.maxRiDuo}`:`-0`,dangRiStr=s.dangRi>0?`-${s.dangRi}`:`-0`,daRiStr=s.daRi>0?`-${s.daRi}`:`-0`,t=tianData||getDefaultTian(),tRiStr=t.tianRi>0?`-${t.tianRi}`:`-0`;let tianMaDisplay=`${t.tianMa}`;if(tianClearMark>0)tianMaDisplay=`${t.tianMa}(${tianClearMark})`;let diffDao=s.zhongLi-s.ma,dao=s.longxia===0?0:Math.sign(diffDao)*Math.abs(diffDao/s.longxia);if(dao<0)dao=dao/.95;let diffTianDao=t.tianZhongLi-t.tianMa,tianDao=t.tianLongxia===0?0:Math.sign(diffTianDao)*Math.abs(diffTianDao/t.tianLongxia);if(tianDao<0)tianDao=tianDao/.95;const huiCheStr=s.maxHuiChe>0?`-${s.maxHuiChe}`:`-0`;return `口：${s.ma} 口盈：${fmtNum(s.maPing,1)} 今口：${tianMaDisplay}
+期望赢：${fmtNum(dao,1)} 今期望赢：${fmtNum(tianDao,1)}
+胜：${longxiaStr} 庄应多：${fmtNum(s.yingSheng,1)} 胜率：${fmtSheng(s.shengPct)}
+盈：${fmtNum(s.f,1)} 均盈：${fmtNum(s.pingLi,1)} 码差：${fmtNum(strength||0,1)}
+今胜：${t.tianLongxia} 今庄应多：${fmtNum(t.tianYingSheng,1)} 今胜率：${fmtSheng(t.tianShengPct)}
+今盈：${fmtNum(t.tianF,1)} 今均盈：${fmtNum(t.tianPingLi,1)} 今码差：${fmtNum(t.tianStrength,1)}
+庄连：${s.daSheng} 闲连：${daRiStr} 当庄：${s.dangSheng} 当闲：${dangRiStr}
+最盈：${fmtNum(s.maxZuiLi,1)} 最亏：${fmtNum(s.minZuiPa,1)} 回撤：${huiCheStr}
+庄：${s.sheng} 闲：-${s.ri} 今庄：${t.tianSheng} 今闲：${tRiStr}
+庄最多：${shengDuoStr} 闲最多：${riDuoStr} 今口盈：${fmtNum(t.tianMaPing,1)}
+流水：${fmtNum(s.fan,1)} 洞：${fmtNum(s.dong,1)} 今流水：${fmtNum(t.tianFan,1)} 今洞：${fmtNum(t.tianDong,1)}`}
+
+    function adjustFontSize() {
+        if (window._adjRaf) cancelAnimationFrame(window._adjRaf);
+        window._adjRaf = requestAnimationFrame(() => {
+            const vals = document.querySelectorAll('.output-row .val');
+            if (!vals.length) return;
+            vals.forEach(v => {
+                v.style.fontSize = '';
+                v.style.whiteSpace = 'nowrap';
+            });
+            void document.body.offsetWidth;
+            vals.forEach(v => {
+                const row = v.parentElement;
+                if (!row) return;
+                const rowStyle = window.getComputedStyle(row);
+                const maxWidth = row.clientWidth - parseFloat(rowStyle.paddingLeft || 0) - parseFloat(rowStyle.paddingRight || 0) - 2;
+                if (maxWidth <= 0) return;
+                const contentWidth = v.scrollWidth;
+                if (contentWidth > maxWidth) {
+                    const currentSize = parseFloat(window.getComputedStyle(v).fontSize);
+                    let newSize = Math.floor(currentSize * (maxWidth / contentWidth) * 0.96);
+                    if (newSize < 9) newSize = 9;
+                    v.style.fontSize = newSize + 'px';
+                }
+            });
+        });
+    }
+
+    function renderGridOutput(){
+        const st=calcState(inputs),um=getUnmatchedData(),t=getTianState(inputs,st);
+        let diffDao=st.zhongLi-st.ma,dao=st.longxia===0?0:Math.sign(diffDao)*Math.abs(diffDao/st.longxia);if(dao<0)dao=dao/.95;
+        let diffTianDao=t.tianZhongLi-t.tianMa,tianDao=t.tianLongxia===0?0:Math.sign(diffTianDao)*Math.abs(diffTianDao/t.tianLongxia);if(tianDao<0)tianDao=tianDao/.95;
+        const yuE=ben+(t.tianF||0);
+        let tianMaDisplay=`${t.tianMa}`;if(tianClearMark>0)tianMaDisplay=`${t.tianMa}(${tianClearMark})`;
+        let preWin='-',preLose='-',preTianWin='-',preTianLose='-';
+        if(previewData){preWin=previewData.win;preLose=previewData.lose;preTianWin=previewData.tianWin;preTianLose=previewData.tianLose}
+
+        let col1Html = '';
+        if (hideLabels) {
+            col1Html = `
+                <div class="output-row"><span class="lbl">本</span><span class="val ${getCls(ben)}">${fmtNum(ben,1)}</span></div>
+                <div class="output-row"><span class="lbl" style="color:var(--cyan); font-weight:bold;">余额</span><span class="val ${getCls(yuE)}">${fmtNum(yuE,1)}</span></div>
+                <div class="output-row"><span class="lbl">预均盈</span><span class="val">${previewData?`<span class="num-pos">${preWin}</span>/<span class="num-neg">${preLose}</span>`:'<span class="num-zero">0</span>'}</span></div>
+                <div class="output-row"><span class="lbl">预今均盈</span><span class="val">${previewData?`<span class="num-pos">${preTianWin}</span>/<span class="num-neg">${preTianLose}</span>`:'<span class="num-zero">0</span>'}</span></div>
+                <div class="output-row"><span class="lbl">庄/闲连</span><span class="val"><span class="${getCls(st.daSheng)}">${st.daSheng}</span>/<span class="${getCls(-st.daRi)}">-${st.daRi}</span></span></div>
+                <div class="output-row"><span class="lbl">庄/闲多/撤</span><span class="val"><span class="${getCls(st.maxShengDuo)}">+${st.maxShengDuo}</span>/<span class="${getCls(-st.maxRiDuo)}">-${st.maxRiDuo}</span>/<span class="${getCls(-st.maxHuiChe)}">-${st.maxHuiChe}</span></span></div>
+                <div class="output-row"><span class="lbl">最盈</span><span class="val ${getCls(st.maxZuiLi)}">${fmtNum(st.maxZuiLi,1)}</span></div>
+                <div class="output-row"><span class="lbl">最亏</span><span class="val ${getCls(st.minZuiPa)}">${fmtNum(st.minZuiPa,1)}</span></div>
+                <div class="output-row"><span class="lbl">庄/闲</span><span class="val"><span class="${getCls(st.sheng)}">${st.sheng}</span>/<span class="${getCls(-st.ri)}">-${st.ri}</span></span></div>
+                <div class="output-row"><span class="lbl">今庄/闲</span><span class="val"><span class="${getCls(t.tianSheng)}">${t.tianSheng}</span>/<span class="${getCls(-t.tianRi)}">-${t.tianRi}</span></span></div>
+            `;
+        } else {
+            col1Html = `
+                <div class="output-row"><span class="lbl">本</span><span class="val ${getCls(ben)}">${fmtNum(ben,1)}</span></div>
+                <div class="output-row"><span class="lbl" style="color:var(--cyan); font-weight:bold;">余额</span><span class="val ${getCls(yuE)}">${fmtNum(yuE,1)}</span></div>
+                <div class="output-row"><span class="lbl">预均盈</span><span class="val">${previewData?`<span class="num-pos">${preWin}</span>/<span class="num-neg">${preLose}</span>`:'<span class="num-zero">0</span>'}</span></div>
+                <div class="output-row"><span class="lbl">预今均盈</span><span class="val">${previewData?`<span class="num-pos">${preTianWin}</span>/<span class="num-neg">${preTianLose}</span>`:'<span class="num-zero">0</span>'}</span></div>
+                <div class="output-row"><span class="lbl">庄连</span><span class="val ${getCls(st.daSheng)}">${st.daSheng}</span></div>
+                <div class="output-row"><span class="lbl">闲连</span><span class="val ${getCls(-st.daRi)}">-${st.daRi}</span></div>
+                <div class="output-row"><span class="lbl">庄最多</span><span class="val ${getCls(st.maxShengDuo)}">+${st.maxShengDuo}</span></div>
+                <div class="output-row"><span class="lbl">闲最多</span><span class="val ${getCls(-st.maxRiDuo)}">-${st.maxRiDuo}</span></div>
+                <div class="output-row"><span class="lbl">最盈</span><span class="val ${getCls(st.maxZuiLi)}">${fmtNum(st.maxZuiLi,1)}</span></div>
+                <div class="output-row"><span class="lbl">最亏</span><span class="val ${getCls(st.minZuiPa)}">${fmtNum(st.minZuiPa,1)}</span></div>
+                <div class="output-row"><span class="lbl">回撤</span><span class="val ${getCls(-st.maxHuiChe)}">-${st.maxHuiChe}</span></div>
+                <div class="output-row"><span class="lbl">庄</span><span class="val ${getCls(st.sheng)}">${st.sheng}</span></div>
+                <div class="output-row"><span class="lbl">闲</span><span class="val ${getCls(-st.ri)}">-${st.ri}</span></div>
+                <div class="output-row"><span class="lbl">今庄</span><span class="val ${getCls(t.tianSheng)}">${t.tianSheng}</span></div>
+                <div class="output-row"><span class="lbl">今闲</span><span class="val ${getCls(-t.tianRi)}">-${t.tianRi}</span></div>
+            `;
+        }
+
+        $("output").innerHTML=`
+          <div class="output-grid">
+            <div class="output-col">
+              ${col1Html}
+            </div>
+            <div class="output-col">
+              <div class="output-row"><span class="lbl">口</span><span class="val ${getCls(st.ma)}">${st.ma}</span></div>
+              <div class="output-row"><span class="lbl">口盈</span><span class="val ${getCls(st.maPing)}">${fmtNum(st.maPing,1)}</span></div>
+              <div class="output-row"><span class="lbl lbl-glow">胜</span><span class="val ${getCls(st.longxia)} val-large val-underline-orange">${st.longxia>0?'+':''}${st.longxia}</span></div>
+              <div class="output-row"><span class="lbl lbl-glow">庄应多</span><span class="val ${getCls(st.yingSheng)} val-underline-yellow">${fmtNum(st.yingSheng,1)}</span></div>
+              <div class="output-row"><span class="lbl">胜率</span><span class="val ${getCls(st.shengPct)}">${fmtSheng(st.shengPct)}</span></div>
+              <div class="output-row"><span class="lbl lbl-glow" style="color:var(--orange);">盈</span><span class="val ${getCls(st.f)} val-underline-wave">${fmtNum(st.f,1)}</span></div>
+              <div class="output-row"><span class="lbl lbl-glow" style="color:var(--orange);">均盈</span><span class="val ${getCls(st.pingLi)} val-large val-underline-purple">${fmtNum(st.pingLi,1)}</span></div>
+              <div class="output-row"><span class="lbl" style="color:var(--yellow);">期望赢</span><span class="val ${getCls(dao)}">${fmtNum(dao,1)}</span></div>
+              <div class="output-row"><span class="lbl">码差</span><span class="val ${getCls(um.strength)}">${fmtNum(um.strength,1)}</span></div>
+              <div class="output-row"><span class="lbl">洞</span><span class="val ${getCls(st.dong)}">${fmtNum(st.dong,1)}</span></div>
+              <div class="output-row"><span class="lbl">流水</span><span class="val ${getCls(st.fan)}">${fmtNum(st.fan,1)}</span></div>
+            </div>
+            <div class="output-col">
+              <div class="output-row"><span class="lbl">今口</span><span class="val ${getCls(t.tianMa)}">${tianMaDisplay}</span></div>
+              <div class="output-row"><span class="lbl">今口盈</span><span class="val ${getCls(t.tianMaPing)}">${fmtNum(t.tianMaPing,1)}</span></div>
+              <div class="output-row"><span class="lbl lbl-glow">今胜</span><span class="val ${getCls(t.tianLongxia)} val-large val-underline-orange">${t.tianLongxia>0?'+':''}${t.tianLongxia}</span></div>
+              <div class="output-row"><span class="lbl lbl-glow">今庄应多</span><span class="val ${getCls(t.tianYingSheng)} val-underline-yellow">${fmtNum(t.tianYingSheng,1)}</span></div>
+              <div class="output-row"><span class="lbl">今胜率</span><span class="val ${getCls(t.tianShengPct)}">${fmtSheng(t.tianShengPct)}</span></div>
+              <div class="output-row"><span class="lbl lbl-glow" style="color:var(--fuchsia);">今盈</span><span class="val ${getCls(t.tianF)} val-underline-wave">${fmtNum(t.tianF,1)}</span></div>
+              <div class="output-row"><span class="lbl lbl-glow" style="color:var(--fuchsia);">今均盈</span><span class="val ${getCls(t.tianPingLi)} val-large val-underline-purple">${fmtNum(t.tianPingLi,1)}</span></div>
+              <div class="output-row"><span class="lbl" style="color:var(--yellow);">今期望赢</span><span class="val ${getCls(tianDao)}">${fmtNum(tianDao,1)}</span></div>
+              <div class="output-row"><span class="lbl">今码差</span><span class="val ${getCls(t.tianStrength)}">${fmtNum(t.tianStrength,1)}</span></div>
+              <div class="output-row"><span class="lbl">今洞</span><span class="val ${getCls(t.tianDong)}">${fmtNum(t.tianDong,1)}</span></div>
+              <div class="output-row"><span class="lbl">今流水</span><span class="val ${getCls(t.tianFan)}">${fmtNum(t.tianFan,1)}</span></div>
+            </div>
+          </div>`;
+        adjustFontSize();
+    }
+
+    function calcUnmatchedFrom(initialItems,initialStrength,seq){const unmatched=[];for(const it of(initialItems||[])){if(!it)continue;const f=(typeof it.force==="number")?it.force:calcSingleForce(it.orig);unmatched.push({force:f,orig:it.orig})}let strength=initialStrength||0;for(let x of(seq||[])){const fx=calcSingleForce(x);if(x>0){let bestIdx=-1,bestAbs=-1;for(let i=0;i<unmatched.length;i++){const it=unmatched[i];if(it.force<0){const absN=Math.abs(it.force);if(absN<fx&&absN>bestAbs){bestAbs=absN;bestIdx=i}}}if(bestIdx!==-1){strength+=fx-bestAbs;unmatched.splice(bestIdx,1)}else{unmatched.push({force:fx,orig:x})}}else{const absFx=Math.abs(fx);let bestIdx=-1,bestForce=Infinity;for(let i=0;i<unmatched.length;i++){const it=unmatched[i];if(it.force>0&&it.force>absFx&&it.force<bestForce){bestForce=it.force;bestIdx=i}}if(bestIdx!==-1){strength+=bestForce-absFx;unmatched.splice(bestIdx,1)}else{unmatched.push({force:fx,orig:x})}}}let changed=true;while(changed){changed=false;let bestI=-1,bestJ=-1,bestDiff=Infinity;for(let i=0;i<unmatched.length;i++){const a=unmatched[i];if(a.force<=0)continue;for(let j=0;j<unmatched.length;j++){if(j===i)continue;const b=unmatched[j];if(b.force>=0)continue;const diff=a.force-Math.abs(b.force);if(diff>0&&diff<bestDiff){bestDiff=diff;bestI=i;bestJ=j}}}if(bestI!==-1){strength+=bestDiff;const idx1=Math.max(bestI,bestJ),idx2=Math.min(bestI,bestJ);unmatched.splice(idx1,1);unmatched.splice(idx2,1);changed=true}}let posCount=unmatched.filter(x=>x.orig>0).length,negCount=unmatched.filter(x=>x.orig<0).length;return{unmatched,strength,posCount,negCount}}
+
+    function calcUnmatched(seq){const list=seq||[];if(unmatchedOverride){const from=Math.min(baseState._frozenAt||0,list.length);return calcUnmatchedFrom(unmatchedOverride.items,unmatchedOverride.strength,list.slice(from))}return calcUnmatchedFrom([],0,list)}
+    const getUnmatchedData=()=>calcUnmatched(inputs);
+    
+    function calcUnmatchedStats(unmatched,strength){const arr=unmatched||[];let posCount=0,negCount=0,negOrigSum=0;for(const item of arr){if(item.orig>0)posCount++;else if(item.orig<0){negCount++;negOrigSum+=item.orig}}const negSum=negOrigSum+(strength||0),avg=negCount>0?negSum/negCount:0;return{posCount,negCount,negSum,avg}}
+    function sortUnmatchedForDisplay(unmatched){const arr=(unmatched||[]).slice();arr.sort((a,b)=>{const aPos=a.orig>0,bPos=b.orig>0;if(aPos!==bPos)return aPos?-1:1;if(aPos)return a.orig-b.orig;return b.orig-a.orig});return arr}
+    function sortOrigsForDisplay(arr){const a=(arr||[]).slice();a.sort((x,y)=>{const xp=x>0,yp=y>0;if(xp!==yp)return xp?-1:1;if(xp)return x-y;return y-x});return a}
+
+    function updateUnmatchedArea(unmatched,strength){const el=$("unmatchedList");if(!el)return;if(!unmatched||unmatched.length===0){el.innerHTML='<span class="unmatched-empty">全部抵消完成</span>'}else{const sorted=sortUnmatchedForDisplay(unmatched);el.innerHTML=sorted.map(item=>`<span class="${item.orig>0?"num-pos":"num-neg"}">${fmtNum(item.orig)}</span>`).join("")}updateUnmatchedStats(unmatched,strength)}
+    function updateUnmatchedStats(unmatched,strength){const el=$("unmatchedStats");if(!el)return;const{posCount,negCount,negSum,avg}=calcUnmatchedStats(unmatched||[],strength);const negSumCls=negSum>0?"num-pos":(negSum<0?"num-neg":"num-zero"),avgCls=avg>0?"num-pos":(avg<0?"num-neg":"num-zero");el.innerHTML=`<span class="stats-item"><span class="num-pos">+${posCount}</span><span class="stats-sep">/</span><span class="num-neg">-${negCount}</span></span><span class="stats-item ${negSumCls}">${fmtNum(negSum)}</span><span class="stats-item ${avgCls}">${fmtNum(avg,1)}</span>`}
+
+    function refreshUnmatchedPreview(){const previewEl=$("unmatchedPreview"),zoomGroup=$("unmatchedZoomGroup");if(!previewEl||!zoomGroup)return;const raw=(numInput.value||"").trim();let shown=false;if(raw&&raw!=="5"&&raw!=="6"){const x=parseFloat(raw);if(!isNaN(x)&&x!==0){const a=Math.abs(x),winRes=calcUnmatched(inputs.concat([a])),loseRes=calcUnmatched(inputs.concat([-a])),winStats=calcUnmatchedStats(winRes.unmatched,winRes.strength),loseStats=calcUnmatchedStats(loseRes.unmatched,loseRes.strength),clsOf=n=>n>0?"num-pos":(n<0?"num-neg":"num-zero");previewEl.innerHTML=`<div class="preview-row win-row"><span class="${clsOf(winStats.negSum)}">${fmtNum(winStats.negSum)}</span><span class="preview-sep">/</span><span class="${clsOf(winStats.avg)}">${fmtNum(winStats.avg,1)}</span></div><div class="preview-row lose-row"><span class="${clsOf(loseStats.negSum)}">${fmtNum(loseStats.negSum)}</span><span class="preview-sep">/</span><span class="${clsOf(loseStats.avg)}">${fmtNum(loseStats.avg,1)}</span></div>`;shown=true}}
+    if(shown){previewEl.classList.add("show");zoomGroup.style.display="none"}else{previewEl.classList.remove("show");zoomGroup.style.display="flex"}}
+
+    function buildLuHtml(){let seq=inputs.slice();const raw=numInput.value.trim();if(raw&&raw!=="5"&&raw!=="6"){const x=parseFloat(raw);if(!isNaN(x)&&x!==0)seq.push(x)}if(seq.length===0)return'暂无记录';const segments=[];let cur=seq[0]>0?1:2,len=1;for(let i=1;i<seq.length;i++){const v=seq[i]>0?1:2;if(v===cur){len++}else{segments.push({val:cur,len});cur=v;len=1}}segments.push({val:cur,len});const grid=Array(6).fill(null).map(()=>[]);let col=0;for(const s of segments){if(s.len<=6){for(let r=0;r<s.len;r++){grid[r][col]=s.val}col+=1}else{for(let r=0;r<6;r++){grid[r][col]=s.val}for(let i=1;i<=s.len-6;i++){grid[5][col+i]=s.val}col+=(s.len-6)+1}}let maxCols=0;for(let r=0;r<6;r++){for(let c=0;c<grid[r].length;c++){if(grid[r][c]!==undefined&&c+1>maxCols)maxCols=c+1}}let html=`<div class="lu-grid" style="grid-template-columns:repeat(${maxCols},10px);">`;for(let r=0;r<6;r++){for(let c=0;c<maxCols;c++){const v=grid[r][c];if(v===1)html+='<div class="lu-cell lu-red">1</div>';else if(v===2)html+='<div class="lu-cell lu-green">2</div>';else html+='<div class="lu-cell"></div>'}}html+='</div>';return html}
+
+    function renderLuDisplay(){const el=$('luDisplay');if(!el)return;el.innerHTML=buildLuHtml();el.scrollLeft=el.scrollWidth}
+    function toggleLuMode(){luMode=!luMode;const btn=$('luBtn');if(btn)btn.classList.toggle('active',luMode);applyChartMode();if(luMode)toast('路排列已显示');else toast('路排列已关闭')}
+    function toggleUnmatchedMode(){if(luMode){luMode=false;const b=$('luBtn');if(b)b.classList.remove('active')}if(viewState!==0){viewState=0;if(savedChartMode!==null){chartMode=savedChartMode;savedChartMode=null}}chartMode=(chartMode===7)?0:7;applyChartMode();applyViewState()}
+    function renderRecent(){const el=$("recentList");if(inputs.length===0){el.innerHTML='<span class="empty">暂无记录</span>';return}el.innerHTML=inputs.slice(-RECENT_LIMIT).map(x=>x>0?'<span class="win">1</span>':'<span class="lose">2</span>').join("")}
+
+    function updateTianDetailData(){
+        tianDetailData=[];const start=Math.min(tianStartIndex,inputs.length);let ts=0,tr=0,tf=0;
+        for(let i=0;i<inputs.length;i++){
+            if(i>=start){if(inputs[i]>0)ts++;else tr++;tf+=calcSingleForce(inputs[i])}
+            let item=detailTianArchive[i]||null;
+            if(!item){for(let k=tianSnapshots.length-1;k>=0;k--){const d=tianSnapshots[k].details;if(d&&d[i]){item={longxia:d[i].longxia,zhongLi:d[i].zhongLi};break}}}
+            if(!item&&i>=start)item={longxia:ts-tr,zhongLi:tf};
+            if(item)detailTianArchive[i]={longxia:item.longxia,zhongLi:item.zhongLi};
+            tianDetailData.push(item);const m=detailMarks[i]||(detailMarks[i]={zeroLx:false,tianZero:false});
+            if(lxHistory[i]===0)m.zeroLx=true;if(item&&item.longxia===0)m.tianZero=true;
+        }
+    }
+    function getFullTianDetailRow(idx){if(tianDetailData.length>idx&&tianDetailData[idx])return tianDetailData[idx];if(detailTianArchive.length>idx&&detailTianArchive[idx])return detailTianArchive[idx];return null}
+
+    function renderDetailRows(){
+        const el=$("recentDetail");
+        if(!el)return;
+        const total=inputs.length;
+        if(total===0){el.innerHTML='<div class="detail-empty">暂无记录</div>';return}
+        const viewH=el.clientHeight||220,st=el.scrollTop;
+        
+        const ROW_H = DETAIL_ROW_H;
+        const EXTRA_H = 24;
+        const clearPosSet = new Set(tianClearPositions.map(p => typeof p === 'object' ? p.pos : p));
+        
+        let start = Math.floor(st / ROW_H) - 2;
+        if (start < 0) start = 0;
+        if (start >= total) start = total - 1;
+        
+        let topHeight = 0;
+        for(let i=0; i<start; i++){
+            let idx = total - 1 - i;
+            topHeight += ROW_H + (clearPosSet.has(idx) ? EXTRA_H : 0);
+        }
+        
+        while (topHeight > st && start > 0) {
+            start--;
+            let idx = total - 1 - start;
+            topHeight -= (ROW_H + (clearPosSet.has(idx) ? EXTRA_H : 0));
+        }
+        while (topHeight + ROW_H + EXTRA_H <= st && start < total) {
+            let idx = total - 1 - start;
+            topHeight += (ROW_H + (clearPosSet.has(idx) ? EXTRA_H : 0));
+            start++;
+        }
+        
+        let end = start;
+        let currentH = 0;
+        while (currentH < viewH + 80 && end < total) {
+            let idx = total - 1 - end;
+            currentH += ROW_H + (clearPosSet.has(idx) ? EXTRA_H : 0);
+            end++;
+        }
+        if (end > total) end = total;
+        
+        let bottomH = 0;
+        for(let i=end; i<total; i++){
+            let idx = total - 1 - i;
+            bottomH += ROW_H + (clearPosSet.has(idx) ? EXTRA_H : 0);
+        }
+        
+        let html="";
+        if(topHeight > 0) html+=`<div style="height:${topHeight}px; flex-shrink:0;"></div>`;
+        
+        for(let i=start; i<end; i++){
+            const idx=total-1-i;
+            const x=inputs[idx], f=calcSingleForce(x), sign=x>0?"+":"-", cls=x>0?"pos":"neg";
+            const isZeroLx=!!(detailMarks[idx]&&detailMarks[idx].zeroLx);
+            const td=getFullTianDetailRow(idx);
+            
+            let rowCls="detail-row";
+            if(isZeroLx) rowCls += " zero-lx-line";
+            
+            const clearObj = tianClearPositions.find(p => (typeof p === 'object' ? p.pos : p) === idx + 1);
+            if(clearObj) rowCls+=" tian-clear-line";
+            
+            if(clearPosSet.has(idx)) rowCls += " tian-spacing-row";
+            
+            let isTianZero=!!(detailMarks[idx]&&detailMarks[idx].tianZero);
+            if(isTianZero)rowCls+=" tian-zero-line";
+            
+            let tlText='-',tlCls='',tzText='-',tzCls='';
+            if(td){
+                tlText=fmtNum(td.longxia);tlCls=td.longxia>0?'pos':(td.longxia<0?'neg':'');
+                tzText=fmtNum(td.zhongLi);tzCls=td.zhongLi>0?'pos':(td.zhongLi<0?'neg':'')
+            }
+            
+            html+=`<div class="${rowCls}">`;
+            if (clearObj && clearObj.date) {
+                html+=`<div class="tian-date-label">${clearObj.date}</div>`;
+            }
+            html+=`<span class="d-idx">${idx+1}</span><span class="d-tz ${tzCls}">${tzText}</span><span class="d-tl ${tlCls}">${tlText}</span><span class="d-in ${cls}">${fmtNum(x)}</span><span class="d-f ${cls}">${fmtNum(f,1)}</span><span class="d-sign ${cls}">${sign}</span></div>`;
+        }
+        
+        if(bottomH > 0) html+=`<div style="height:${bottomH}px; flex-shrink:0;"></div>`;
+        
+        detailLock=true;
+        el.innerHTML=html;
+        if(el.scrollTop!==st)el.scrollTop=st;
+        detailLock=false;
+    }
+    function renderRecentDetail(){const el=$("recentDetail");if(!el)return;el.scrollTop=0;renderDetailRows()}
+    function updateYuE(){ /* 余额已移至输出卡片 */ }
+
+    function renderOutput(checkHtml=""){$("checkArea").innerHTML=checkHtml;lxHistory=[];let curLx=baseState.sheng-baseState.ri;for(let x of inputs){if(x>0)curLx++;else curLx--;lxHistory.push(curLx)}updateTianDetailData();renderRecent();renderRecentDetail();renderChart();const st=calcState(inputs);updateFloatArea(st);const um=getUnmatchedData();updateUnmatchedArea(um.unmatched,um.strength);refreshUnmatchedPreview();updateYuE();renderGridOutput();if(luMode)renderLuDisplay()}
+    function refreshOutputOnly(){const st=calcState(inputs),um=getUnmatchedData();updateTianDetailData();renderChart();updateFloatArea(st);updateUnmatchedArea(um.unmatched,um.strength);updateYuE();renderGridOutput();if(luMode)renderLuDisplay()}
+
+    const packData=()=>({detailMarks,inputs,outputHistory,baseState,chartZoom,unmatchedZoom,unmatchedOverride,tianStartIndex,tianClearMark,tianSnapshots,detailTianArchive,ben,hideLabels,hideBen,showMicroLabels,version:5,savedAt:new Date().toISOString(),tianClearPositions, dongBase, tianBase});
+    function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(packData()))}catch(e){}}
+
+    function normalizeTianSnapshots(raw){if(!Array.isArray(raw))return[];const list=[];for(const s of raw){if(!s||typeof s!=='object')continue;if(!Array.isArray(s.details))continue;const details=s.details.map(d=>{if(!d||typeof d!=='object')return null;if(typeof d.longxia!=='number'||typeof d.zhongLi!=='number')return null;return{longxia:d.longxia,zhongLi:d.zhongLi}});list.push({id:(typeof s.id==='string'&&s.id)?s.id:('ts_'+Math.random().toString(36).slice(2,10)),savedAt:(typeof s.savedAt==='string'&&s.savedAt)?s.savedAt:new Date().toISOString(),tianStartIndex:(typeof s.tianStartIndex==='number'&&isFinite(s.tianStartIndex))?s.tianStartIndex:0,tianClearMark:(typeof s.tianClearMark==='number'&&isFinite(s.tianClearMark))?s.tianClearMark:0,tianF1:(typeof s.tianF1==='number'&&isFinite(s.tianF1))?s.tianF1:0,inputsLength:(typeof s.inputsLength==='number'&&isFinite(s.inputsLength))?s.inputsLength:details.length,details})}return list}
+    function normalizeTianArchive(raw,len){if(!Array.isArray(raw))return[];const arr=[];for(let i=0;i<raw.length;i++){const d=raw[i];if(!d||typeof d!=='object'){arr.push(null);continue}if(typeof d.longxia!=='number'||typeof d.zhongLi!=='number'){arr.push(null);continue}arr.push({longxia:d.longxia,zhongLi:d.zhongLi})}return arr}
+
+    function parseData(data){
+        if(!Array.isArray(data.inputs))throw new Error("格式错误");
+        const nextInputs=data.inputs.map(Number);if(nextInputs.some(x=>!Number.isFinite(x)||x===0))throw new Error("明细必须是有效非零数字");inputs=nextInputs;
+        detailMarks=inputs.map((_,i)=>({zeroLx:!!(data.detailMarks&&data.detailMarks[i]&&data.detailMarks[i].zeroLx),tianZero:!!(data.detailMarks&&data.detailMarks[i]&&data.detailMarks[i].tianZero)}));
+        outputHistory=data.outputHistory||[];
+        if(typeof data.chartZoom==="number"&&isFinite(data.chartZoom)){chartZoom=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,data.chartZoom));document.documentElement.style.setProperty("--chart-zoom",String(chartZoom));updateZoomUI()}
+        if(typeof data.unmatchedZoom==="number"&&isFinite(data.unmatchedZoom)){unmatchedZoom=Math.max(UNMATCHED_ZOOM_MIN,Math.min(UNMATCHED_ZOOM_MAX,data.unmatchedZoom));document.documentElement.style.setProperty("--unmatched-zoom",String(unmatchedZoom));updateUnmatchedZoomUI()}
+        
+        tianStartIndex=(typeof data.tianStartIndex==="number"&&isFinite(data.tianStartIndex))?data.tianStartIndex:0;
+        tianClearMark=(typeof data.tianClearMark==="number"&&isFinite(data.tianClearMark))?data.tianClearMark:0;
+        
+        tianClearPositions=Array.isArray(data.tianClearPositions)?data.tianClearPositions.map(p => {
+            if (typeof p === 'number') return { pos: p, date: '历史清零' };
+            if (p && !p.date) return { pos: p.pos, date: '历史清零' };
+            return p;
+        }):[];
+        
+        if(tianStartIndex > 0 && !tianClearPositions.some(p => (typeof p === 'object' ? p.pos : p) === tianStartIndex)) {
+            tianClearPositions.push({ pos: tianStartIndex, date: '历史清零' });
+            tianClearPositions.sort((a,b)=> (typeof a === 'object' ? a.pos : a) - (typeof b === 'object' ? b.pos : b));
+        }
+
+        dongBase=(typeof data.dongBase==="number"&&isFinite(data.dongBase))?data.dongBase:100;
+        const dongInput=$("dongInput");
+        if(dongInput)dongInput.value=dongBase>0?dongBase:'';
+
+        tianBase=data.tianBase?Object.assign({sheng:0,ri:0,f:0,fan:0,dong:0,strength:0},data.tianBase):{sheng:0,ri:0,f:0,fan:0,dong:0,strength:0};
+
+        ben=(typeof data.ben==="number"&&isFinite(data.ben))?data.ben:0;
+        const benInput=$("benInput");if(benInput)benInput.value=ben>0?ben:'';
+        
+        hideLabels=(typeof data.hideLabels==="boolean")?data.hideLabels:false;
+        if(hideLabels)document.body.classList.add('hide-labels');else document.body.classList.remove('hide-labels');updateHideLabelBtn();
+        hideBen=(typeof data.hideBen==="boolean")?data.hideBen:false;
+        if(hideBen)document.body.classList.add('hide-ben');else document.body.classList.remove('hide-ben');updateHideBenBtn();
+        showMicroLabels=(typeof data.showMicroLabels==="boolean")?data.showMicroLabels:false;
+        if(showMicroLabels)document.body.classList.add('show-micro');else document.body.classList.remove('show-micro');updateMicroBtn();
+        
+        tianSnapshots=normalizeTianSnapshots(data.tianSnapshots);
+        detailTianArchive=normalizeTianArchive(data.detailTianArchive,inputs.length);
+        baseState=Object.assign(getBaseState(),data.baseState||{});
+        if(typeof baseState._frozenAt!=="number")baseState._frozenAt=0;
+        
+        if(data.unmatchedOverride&&Array.isArray(data.unmatchedOverride.items)){
+            unmatchedOverride={items:data.unmatchedOverride.items.filter(it=>it&&typeof it.orig==="number"&&it.orig!==0).map(it=>({orig:it.orig})),strength:typeof data.unmatchedOverride.strength==="number"?data.unmatchedOverride.strength:0}
+        } else {
+            unmatchedOverride=null;
+        }
+        redoStack=[];clearPreview();rebuild();
+    }
+
+    function load(){try{let raw=localStorage.getItem(STORAGE_KEY);if(!raw)raw=localStorage.getItem("shengri_app_v4");if(!raw)raw=localStorage.getItem("shengri_app_v3");if(!raw)raw=localStorage.getItem("shengri_app_v2");if(!raw)raw=localStorage.getItem("shengri_app_v1");if(!raw)return;parseData(JSON.parse(raw))}catch(e){}}
+
+    function rebuild(){outputHistory=[];for(let i=0;i<inputs.length;i++){const partial=inputs.slice(0,i+1),st=calcState(partial),um=calcUnmatched(partial),t=getTianState(partial,st);outputHistory.push(formatOutput(st,um.strength,t))}renderOutput();save()}
+
+    function toast(msg,isWarn=false){const el=$("toast");el.textContent=msg;el.classList.remove("bubble","warn-big");el.style.color="";el.style.fontSize="";el.classList.add("show");if(isWarn){el.style.color="#eab308";el.style.fontSize="12px"}else{el.style.color="#fff";el.style.fontSize="14px"}if(el.timer)clearTimeout(el.timer);el.timer=setTimeout(()=>{el.classList.remove("show")},1800)}
+    function warnBigToast(msg,duration=2000){const el=$("toast");el.textContent=msg;el.classList.remove("bubble");el.classList.add("show","warn-big");el.style.color="";el.style.fontSize="";el.style.padding="";el.style.borderColor="";el.style.background="";el.style.boxShadow="";if(el.timer)clearTimeout(el.timer);el.timer=setTimeout(()=>{el.classList.remove("show","warn-big")},duration)}
+    function bubbleToast(html,duration){const el=$("toast");el.innerHTML=html;el.style.color="";el.style.fontSize="";el.classList.remove("warn-big");el.classList.add("show","bubble");if(el.timer)clearTimeout(el.timer);el.timer=setTimeout(()=>{el.classList.remove("show","bubble")},duration)}
+    function flashYellowGlow(duration=2000){const glow=$("screenGlow");if(!glow)return;glow.className="screen-glow";void glow.offsetWidth;glow.classList.add("yellow");if(glow.timer)clearTimeout(glow.timer);glow.timer=setTimeout(()=>{glow.classList.add("fade-out");setTimeout(()=>{glow.className="screen-glow"},500)},duration)}
+    function flashPurpleGlow(duration=2000){const glow=$("screenGlow");if(!glow)return;glow.className="screen-glow";void glow.offsetWidth;glow.classList.add("purple");if(glow.timer)clearTimeout(glow.timer);glow.timer=setTimeout(()=>{glow.classList.add("fade-out");setTimeout(()=>{glow.className="screen-glow"},500)},duration)}
+
+    function stopBeep(){try{if(beepOsc){try{beepOsc.stop()}catch(e){}try{beepOsc.disconnect()}catch(e){}beepOsc=null}if(beepGain){try{beepGain.disconnect()}catch(e){}beepGain=null}}catch(e){}}
+    function playBeep(duration=2000){try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;if(!audioCtx)audioCtx=new AC();if(audioCtx.state==="suspended")audioCtx.resume().catch(()=>{});stopBeep();const now=audioCtx.currentTime,dur=duration/1000,osc=audioCtx.createOscillator(),gain=audioCtx.createGain();osc.type="square";osc.frequency.setValueAtTime(880,now);gain.gain.setValueAtTime(0.0001,now);gain.gain.exponentialRampToValueAtTime(0.12,now+0.02);gain.gain.setValueAtTime(0.12,Math.max(now+0.03,now+dur-0.08));gain.gain.exponentialRampToValueAtTime(0.0001,now+dur);osc.connect(gain);gain.connect(audioCtx.destination);osc.start(now);osc.stop(now+dur+0.02);beepOsc=osc;beepGain=gain;osc.onended=()=>{if(beepOsc===osc)beepOsc=null;if(beepGain===gain)beepGain=null}}catch(e){}}
+
+    function updateFloatArea(s){const el=$("floatArea");if(!el)return;const ratios=[0.05,0.10,0.15,0.20,0.50];let html="";for(const r of ratios){const flt=calcFloat(s,r),pct=Math.round(r*100)+"%",upStr=`${fmtNum(flt.x_up,1)}(${fmtNum(flt.winP_up,1)}/${fmtNum(flt.loseP_up,1)})`,downStr=`${fmtNum(flt.x_down,1)}(${fmtNum(flt.winP_down,1)}/${fmtNum(flt.loseP_down,1)})`;html+=`<div class="float-row">${colorizeNumbers(`${pct}：${upStr},${downStr}`)}</div>`}el.innerHTML=html}
+
+    function computeYingSeries(){const series=[];let f=0;for(let i=0;i<inputs.length;i++){f+=calcSingleForce(inputs[i]);series.push(f)}return series}
+    function computeLongxiaSeries(){const series=[];let sheng=0,ri=0;for(let i=0;i<inputs.length;i++){const x=inputs[i];if(x>0)sheng++;else ri++;series.push(sheng-ri)}return series}
+    function computeTianYingSeries(){const series=[],start=Math.min(tianStartIndex,inputs.length);let tF=tianBase.f||0;for(let i=start;i<inputs.length;i++){tF+=calcSingleForce(inputs[i]);series.push(tF)}return series}
+    function computeTianLongxiaSeries(){const series=[],start=Math.min(tianStartIndex,inputs.length);let tSheng=tianBase.sheng||0,tRi=tianBase.ri||0;for(let i=start;i<inputs.length;i++){const x=inputs[i];if(x>0)tSheng++;else tRi++;series.push(tSheng-tRi)}return series}
+
+    function buildPoints(series,plotW,xOf,yOf){const n=series.length,pts=[],maxPts=Math.max(4,Math.floor(plotW));if(n<=maxPts){for(let i=0;i<n;i++)pts.push({x:xOf(i),y:yOf(series[i]),v:series[i]})}else{const buckets=Math.max(2,Math.floor(maxPts/2)),size=n/buckets;for(let b=0;b<buckets;b++){const start=Math.floor(b*size),end=Math.min(n,Math.floor((b+1)*size));if(start>=end)continue;let mn=Infinity,mx=-Infinity,mnI=start,mxI=start;for(let i=start;i<end;i++){const v=series[i];if(v<mn){mn=v;mnI=i}if(v>mx){mx=v;mxI=i}}if(mnI<=mxI){pts.push({x:xOf(mnI),y:yOf(mn),v:mn});pts.push({x:xOf(mxI),y:yOf(mx),v:mx})}else{pts.push({x:xOf(mxI),y:yOf(mx),v:mx});pts.push({x:xOf(mnI),y:yOf(mn),v:mn})}}}return pts}
+    function drawDot(ctx,x,y,color){ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,2.8,0,Math.PI*2);ctx.fill();ctx.strokeStyle="rgba(255,255,255,0.65)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y,4.6,0,Math.PI*2);ctx.stroke()}
+    function roundRectPath(ctx,x,y,w,h,r){if(w<2*r)r=w/2;if(h<2*r)r=h/2;ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
+    function segmentsIntersect(x1,y1,x2,y2,x3,y3,x4,y4){const d=(x2-x1)*(y4-y3)-(y2-y1)*(x4-x3);if(Math.abs(d)<1e-12)return false;const t=((x3-x1)*(y4-y3)-(y3-y1)*(x4-x3))/d,u=((x3-x1)*(y2-y1)-(y3-y1)*(x2-x1))/d;return t>=0&&t<=1&&u>=0&&u<=1}
+    function segIntersectsRect(x1,y1,x2,y2,rx1,ry1,rx2,ry2){const rxmin=Math.min(rx1,rx2),rxmax=Math.max(rx1,rx2),rymin=Math.min(ry1,ry2),rymax=Math.max(ry1,ry2);if(x1<rxmin&&x2<rxmin)return false;if(x1>rxmax&&x2>rxmax)return false;if(y1<rymin&&y2<rymin)return false;if(y1>rymax&&y2>rymax)return false;if(x1>=rxmin&&x1<=rxmax&&y1>=rymin&&y1<=rymax)return true;if(x2>=rxmin&&x2<=rxmax&&y2>=rymin&&y2<=rymax)return true;return(segmentsIntersect(x1,y1,x2,y2,rxmin,rymin,rxmax,rymin)||segmentsIntersect(x1,y1,x2,y2,rxmin,rymax,rxmax,rymax)||segmentsIntersect(x1,y1,x2,y2,rxmin,rymin,rxmin,rymax)||segmentsIntersect(x1,y1,x2,y2,rxmax,rymin,rxmax,rymax))}
+    function rectIntersectsCurve(x1,y1,x2,y2,pts,dotR){for(let i=0;i<pts.length-1;i++){if(segIntersectsRect(pts[i].x,pts[i].y,pts[i+1].x,pts[i+1].y,x1,y1,x2,y2))return true}if(pts.length>0){const last=pts[pts.length-1],cx=Math.max(x1,Math.min(last.x,x2)),cy=Math.max(y1,Math.min(last.y,y2)),dx=last.x-cx,dy=last.y-cy;if(dx*dx+dy*dy<dotR*dotR)return true}if(pts.length===1){const p=pts[0],cx=Math.max(x1,Math.min(p.x,x2)),cy=Math.max(y1,Math.min(p.y,y2)),dx=p.x-cx,dy=p.y-cy;if(dx*dx+dy*dy<dotR*dotR)return true}return false}
+    function drawLabelSafely(ctx,anchorX,anchorY,text,color,cssW,cssH,pts,dotR){ctx.font="bold 11px 'SF Mono',Menlo,Consolas,monospace";const tw=ctx.measureText(text).width,th=12,bgPadX=3,bgPadY=2,margin=1,hGap=8,vOffsets=[-10,10,-20,20,-32,32,-45,45,-58,58],candidates=[];for(const vo of vOffsets)candidates.push({left:anchorX+hGap,top:anchorY+vo-th/2});for(const vo of vOffsets)candidates.push({left:anchorX-hGap-tw,top:anchorY+vo-th/2});for(const vo of[-16,-26,-38,-52,-66])candidates.push({left:anchorX-tw/2,top:anchorY+vo-th/2});for(const vo of[16,26,38,52,66])candidates.push({left:anchorX-tw/2,top:anchorY+vo-th/2});let best=null;for(const c of candidates){const bx1=c.left-bgPadX,by1=c.top-bgPadY,bx2=c.left+tw+bgPadX,by2=c.top+th+bgPadY;if(bx1<margin||bx2>cssW-margin)continue;if(by1<margin||by2>cssH-margin)continue;if(!rectIntersectsCurve(bx1,by1,bx2,by2,pts,dotR)){best=c;break}}if(!best)return;roundRectPath(ctx,best.left-bgPadX,best.top-bgPadY,tw+bgPadX*2,th+bgPadY*2,3);ctx.fillStyle="rgba(26,26,26,0.96)";ctx.fill();ctx.fillStyle=color;ctx.textAlign="left";ctx.textBaseline="top";ctx.fillText(text,best.left,best.top)}
+    function drawOneChart(canvas,series){if(!canvas)return;const cssW=canvas.clientWidth,cssH=canvas.clientHeight;if(cssW<=0||cssH<=0)return;const dpr=window.devicePixelRatio||1,needW=Math.round(cssW*dpr),needH=Math.round(cssH*dpr);if(canvas.width!==needW||canvas.height!==needH){canvas.width=needW;canvas.height=needH}const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,cssW,cssH);const n=series.length;let minV=0,maxV=0;for(let i=0;i<n;i++){const v=series[i];if(v<minV)minV=v;if(v>maxV)maxV=v}if(minV===maxV){minV-=1;maxV+=1}const pad=(maxV-minV)*0.14;minV-=pad;maxV+=pad;const padL=4,padR=4,padT=8,padB=8,plotW=cssW-padL-padR,plotH=cssH-padT-padB,xOf=i=>n<=1?padL+plotW/2:padL+(i/(n-1))*plotW,yOf=v=>padT+(1-(v-minV)/(maxV-minV))*plotH;ctx.strokeStyle="rgba(255,255,255,0.15)";ctx.lineWidth=1;const y0=yOf(0);ctx.beginPath();ctx.moveTo(padL,y0);ctx.lineTo(padL+plotW,y0);ctx.stroke();if(n===0)return;const pts=buildPoints(series,plotW,xOf,yOf);ctx.lineWidth=1.6;ctx.lineJoin="round";ctx.lineCap="round";for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],mid=(a.v+b.v)/2;ctx.strokeStyle=mid>=0?"#ef4444":"#22c55e";ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}if(pts.length===1){const p=pts[0];ctx.fillStyle=p.v>=0?"#ef4444":"#22c55e";ctx.beginPath();ctx.arc(p.x,p.y,2.5,0,Math.PI*2);ctx.fill()}const lastV=series[n-1],lastP=pts[pts.length-1];if(lastP){const c=lastV>=0?"#ef4444":"#22c55e";drawDot(ctx,lastP.x,lastP.y,c);drawLabelSafely(ctx,lastP.x,lastP.y,fmtNum(lastV,1),c,cssW,cssH,pts,5.5)}}
+    function drawAllCharts(){if(chartMode===0||chartMode===6||chartMode===7)return;const canvasA=$("chartA"),canvasB=$("chartB"),canvasC=$("chartC"),canvasD=$("chartD");if(chartMode===1){drawOneChart(canvasA,computeYingSeries());drawOneChart(canvasB,computeLongxiaSeries());drawOneChart(canvasC,computeTianYingSeries());drawOneChart(canvasD,computeTianLongxiaSeries())}else if(chartMode===2){drawOneChart(canvasA,computeYingSeries())}else if(chartMode===3){drawOneChart(canvasB,computeLongxiaSeries())}else if(chartMode===4){drawOneChart(canvasC,computeTianYingSeries())}else if(chartMode===5){drawOneChart(canvasD,computeTianLongxiaSeries())}}
+    function renderChart(){if(chartRaf)return;chartRaf=requestAnimationFrame(()=>{chartRaf=null;drawAllCharts()})}
+    
+    function updateZoomUI(){const label=$("zoomLabelBtn");if(label)label.textContent=Math.round(chartZoom*100)+"%";const inBtn=$("zoomInBtn"),outBtn=$("zoomOutBtn");if(inBtn)inBtn.disabled=chartZoom>=ZOOM_MAX-1e-6;if(outBtn)outBtn.disabled=chartZoom<=ZOOM_MIN+1e-6}
+    function setChartZoom(z){chartZoom=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,z));document.documentElement.style.setProperty("--chart-zoom",String(chartZoom));updateZoomUI();renderChart();save()}
+    function updateUnmatchedZoomUI(){const label=$("unmatchedZoomLabelBtn");if(label)label.textContent=Math.round(unmatchedZoom*100)+"%";const inBtn=$("unmatchedZoomInBtn"),outBtn=$("unmatchedZoomOutBtn");if(inBtn)inBtn.disabled=unmatchedZoom>=UNMATCHED_ZOOM_MAX-1e-6;if(outBtn)outBtn.disabled=unmatchedZoom<=UNMATCHED_ZOOM_MIN+1e-6}
+    function setUnmatchedZoom(z){unmatchedZoom=Math.max(UNMATCHED_ZOOM_MIN,Math.min(UNMATCHED_ZOOM_MAX,z));document.documentElement.style.setProperty("--unmatched-zoom",String(unmatchedZoom));updateUnmatchedZoomUI();save()}
+    function updateChartModeUI(){const btn=$("chartBtn");if(btn)btn.textContent=CHART_MODE_LABELS[chartMode]}
+
+    function applyChartMode(){const area=$("chartArea"),floatArea=$("floatArea"),unmatchedArea=$("unmatchedArea"),itemA=$("chartItemA"),itemB=$("chartItemB"),itemC=$("chartItemC"),itemD=$("chartItemD");updateChartModeUI();area.classList.add("hidden");floatArea.classList.add("hidden");unmatchedArea.classList.add("hidden");area.classList.remove("lu-mode");document.body.classList.remove('view-chart-full');if(luMode){area.classList.remove("hidden");area.classList.add("lu-mode");renderLuDisplay();renderChart();return}if(chartMode>=1&&chartMode<=5){area.classList.remove("hidden");document.body.classList.add('view-chart-full');if(chartMode===1){area.classList.remove("mode-single");itemA.style.display="";itemB.style.display="";itemC.style.display="";itemD.style.display=""}else if(chartMode===2){area.classList.add("mode-single");itemA.style.display="";itemB.style.display="none";itemC.style.display="none";itemD.style.display="none"}else if(chartMode===3){area.classList.add("mode-single");itemA.style.display="none";itemB.style.display="";itemC.style.display="none";itemD.style.display="none"}else if(chartMode===4){area.classList.add("mode-single");itemA.style.display="none";itemB.style.display="none";itemC.style.display="";itemD.style.display="none"}else if(chartMode===5){area.classList.add("mode-single");itemA.style.display="none";itemB.style.display="none";itemC.style.display="none";itemD.style.display=""}}else if(chartMode===6){floatArea.classList.remove("hidden")}else if(chartMode===7){unmatchedArea.classList.remove("hidden")}renderChart();setTimeout(()=>{window.dispatchEvent(new Event('resize'))},50)}
+    function toggleChartMode(){if(luMode){luMode=false;const b=$('luBtn');if(b)b.classList.remove('active')}if(viewState!==0){viewState=0;if(savedChartMode!==null){chartMode=savedChartMode;savedChartMode=null}}chartMode=(chartMode+1)%8;applyChartMode();applyViewState()}
+    
+    function applyViewState(){document.body.classList.remove('view-detail-full','view-output-full');const btn=$('detailBtn');if(viewState===1){document.body.classList.add('view-detail-full');btn.textContent='输出';setTimeout(renderRecentDetail,50)}else if(viewState===2){document.body.classList.add('view-output-full');btn.textContent='四图'}else if(viewState===3){btn.textContent='恢复'}else{btn.textContent='明细'}}
+    function toggleDetailView(){viewState=(viewState+1)%4;if(viewState===3){savedChartMode=chartMode;chartMode=1;applyChartMode()}else if(viewState===0){if(savedChartMode!==null){chartMode=savedChartMode;savedChartMode=null}applyChartMode()}applyViewState()}
+    
+    function togglePanel(){panelHidden=!panelHidden;const grid=$("toolbarGrid"),btn=$("panelBtn");grid.classList.toggle("panel-hidden",panelHidden);btn.classList.toggle("active",panelHidden);if(!panelHidden&&viewState!==0){viewState=0;if(savedChartMode!==null){chartMode=savedChartMode;savedChartMode=null}applyChartMode();applyViewState()}}
+    function toggleHideLabels(){hideLabels=!hideLabels;document.body.classList.toggle('hide-labels',hideLabels);updateHideLabelBtn();renderOutput();save()}
+    function updateHideLabelBtn(){const btn=$('hideLabelBtn');if(btn)btn.textContent=hideLabels?'显名':'隐名'}
+    function toggleHideBen(){hideBen=!hideBen;document.body.classList.toggle('hide-ben',hideBen);updateHideBenBtn();adjustFontSize();save()}
+    function updateHideBenBtn(){const btn=$('hideBenBtn');if(btn)btn.textContent=hideBen?'显本':'隐本'}
+    function toggleMicroLabels(){showMicroLabels=!showMicroLabels;document.body.classList.toggle('show-micro',showMicroLabels);updateMicroBtn();adjustFontSize();save()}
+    function updateMicroBtn(){const btn=$('microBtn');if(btn)btn.textContent=showMicroLabels?'隐微':'显微'}
+
+    function updatePreview(){refreshUnmatchedPreview();if(luMode)renderLuDisplay();const raw=numInput.value.trim();if(!raw||raw==="5"||raw==="6"){if(previewData){previewData=null;refreshOutputOnly()}return}const x=parseFloat(raw);if(isNaN(x)||x===0){if(previewData){previewData=null;refreshOutputOnly()}return}const a=Math.abs(x),winState=calcState(inputs.concat([a])),loseState=calcState(inputs.concat([-a])),winTianState=getTianState(inputs.concat([a]),winState),loseTianState=getTianState(inputs.concat([-a]),loseState);previewData={win:fmtNum(winState.pingLi,1),lose:fmtNum(loseState.pingLi,1),tianWin:fmtNum(winTianState.tianPingLi,1),tianLose:fmtNum(loseTianState.tianPingLi,1)};refreshOutputOnly()}
+    function clearPreview(){previewData=null}
+
+    function autoExport(){try{const now=new Date(),pad=n=>String(n).padStart(2,"0"),filename=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.json`,jsonStr=JSON.stringify({...packData(),note:"生日统计规则数据备份（含永久明细归档）"},null,2),blob=new Blob([jsonStr],{type:"application/json;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=filename;a.style.display="none";document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},200);toast("已输入 "+inputs.length+" 条 · 自动导出 "+filename,false)}catch(e){toast("自动导出失败，请手动导出")}}
+
+    function generateExportDetail(){if(inputs.length===0)return;let start=parseInt($("exportRangeStart").value,10),end=parseInt($("exportRangeEnd").value,10);if(isNaN(start)||start<1)start=1;if(isNaN(end)||end>inputs.length)end=inputs.length;if(start>end){toast("起始序号不能大于结束序号");start=end}if(start<1)start=1;$("exportRangeStart").value=start;$("exportRangeEnd").value=end;let textSymbols="",textValues="";for(let i=start-1;i<end;i++){const x=inputs[i];textSymbols+=(x>0?SYMBOL_WIN:SYMBOL_LOSE)+"\n";textValues+=fmtNum(x)+"\n"}$("exportDetailSymbols").value=textSymbols;$("exportDetailValues").value=textValues}
+    function openExportDetailModal(){if(inputs.length===0){toast("暂无明细数据");return}$("exportRangeStart").value=1;$("exportRangeEnd").value=inputs.length;generateExportDetail();$("exportDetailModal").classList.add("show")}
+    function copyTextFrom(elId,successMsg){const text=$(elId).value;if(!text){toast("没有内容可复制");return}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(()=>toast(successMsg)).catch(()=>fallbackCopyEl(elId,successMsg))}else fallbackCopyEl(elId,successMsg)}
+    function fallbackCopyEl(elId,successMsg){const ta=$(elId);ta.focus();ta.select();try{document.execCommand("copy");toast(successMsg)}catch(e){toast("复制失败，请长按文本手动复制")}}
+    function downloadText(text,filename){if(!text){toast("没有内容可下载");return}try{const blob=new Blob([text],{type:"text/plain;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=filename;a.style.display="none";document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},200);toast("已触发下载")}catch(e){toast("下载失败，请改用「复制内容」")}}
+
+    function formatSnapshotTime(iso){const d=new Date(iso);if(isNaN(d.getTime()))return iso||'';const pad=n=>String(n).padStart(2,'0');return`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`}
+    function findActiveSnapshotId(){for(let i=tianSnapshots.length-1;i>=0;i--){const s=tianSnapshots[i];if(s.tianStartIndex===tianStartIndex&&s.tianClearMark===tianClearMark&&Math.abs((s.tianF1||0)-(baseState.tianF1||0))<1e-9)return s.id}return null}
+    function renderTianSnapList(){const el=$('tianSnapList');if(!el)return;if(!tianSnapshots||tianSnapshots.length===0){el.innerHTML='<div class="detail-edit-empty">暂无快照</div>';return}const activeId=findActiveSnapshotId(),items=[];for(let i=tianSnapshots.length-1;i>=0;i--){const s=tianSnapshots[i],isActive=s.id===activeId;items.push(`<div class="tian-snap-row"><div class="tian-snap-info"><div class="tian-snap-time">${formatSnapshotTime(s.savedAt)}${isActive?' · 当前':''}</div><div class="tian-snap-meta">条目 ${s.inputsLength} · 标记 ${s.tianClearMark} · 天力1 ${fmtNum(s.tianF1,1)}</div></div><button class="btn ${isActive?'btn-tian active':'btn-secondary'} tian-snap-restore" data-sid="${s.id}">${isActive?'已应用':'恢复'}</button><button class="btn btn-danger tian-snap-del" data-sid="${s.id}">删除</button></div>`)}el.innerHTML=items.join('');el.querySelectorAll('.tian-snap-restore').forEach(b=>{b.addEventListener('click',()=>{vibrate();restoreTianSnapshot(b.dataset.sid)})});el.querySelectorAll('.tian-snap-del').forEach(b=>{b.addEventListener('click',()=>{vibrate();deleteTianSnapshot(b.dataset.sid)})})}
+    function openTianSnapModal(){renderTianSnapList();$('tianSnapModal').classList.add('show')}
+    function closeTianSnapModal(){$('tianSnapModal').classList.remove('show')}
+    function buildFullTianDetailsSnapshot(){const details=[];for(let i=0;i<inputs.length;i++){const td=getFullTianDetailRow(i);details.push(td?{longxia:td.longxia,zhongLi:td.zhongLi}:null)}return details}
+    
+    function doTianClear(){
+        vibrate();
+        if(inputs.length===0){toast('暂无数据，无需清零');return}
+        if(!confirm('确定将天系列清零？清零前会自动保存一份快照。永久归档的今胜/今天龙不受影响，可随时恢复。'))return;
+        updateTianDetailData();
+        const details=buildFullTianDetailsSnapshot(),
+        snap={id:'ts_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),savedAt:new Date().toISOString(),tianStartIndex:tianStartIndex,tianClearMark:tianClearMark,tianF1:baseState.tianF1||0,inputsLength:inputs.length,details};
+        tianSnapshots.push(snap);
+        
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
+        
+        if(!tianClearPositions.some(p=> (typeof p === 'object' ? p.pos : p) === inputs.length)) {
+            tianClearPositions.push({ pos: inputs.length, date: dateStr });
+        }
+        
+        tianStartIndex=inputs.length;
+        tianClearMark=inputs.length+1;
+        baseState.tianF1=0;baseState.tianPingLi1=0;
+        tianBase = { sheng:0, ri:0, f:0, fan:0, dong:0, strength:0 };
+        save();renderOutput();toast('天系列已清零，快照已保存，历史明细已归档')
+    }
+    function restoreTianSnapshot(id){const snap=tianSnapshots.find(s=>s.id===id);if(!snap){toast('快照不存在');return}if(!confirm('恢复后，当前天系列将回滚到该快照时刻。快照不会被删除，之后仍可再次恢复。确定？'))return;tianStartIndex=snap.tianStartIndex;tianClearMark=snap.tianClearMark;baseState.tianF1=snap.tianF1||0;baseState.tianPingLi1=0;tianBase={sheng:0,ri:0,f:0,fan:0,dong:0,strength:0};save();renderOutput();renderTianSnapList();toast('已恢复到该快照（快照已保留）')}
+    function deleteTianSnapshot(id){const idx=tianSnapshots.findIndex(s=>s.id===id);if(idx<0){toast('快照不存在');return}if(!confirm('删除快照只影响快照列表本身。永久归档的今胜/今天龙不会受影响，明细表仍完整显示。确定删除？'))return;tianSnapshots.splice(idx,1);save();renderTianSnapList();toast('快照已删除（归档明细不受影响）')}
+
+    function readUmEditList(){const els=$$("#umEditList input[data-umidx]");if(els.length===0)return[];const vals=[];for(const inp of els){const n=parseFloat((inp.value||"").trim());vals.push(isNaN(n)?0:n)}return vals}
+    function renderUmEditList(vals){umEditVals=vals.slice();const listEl=$("umEditList"),badge=$("umCountBadge");if(badge)badge.textContent=String(vals.length);if(!vals||vals.length===0){listEl.innerHTML='<div class="detail-edit-empty">无未抵消项</div>';return}listEl.innerHTML=vals.map((v,i)=>{const cls=v>0?"pos":(v<0?"neg":"");return`<div class="detail-edit-row"><span class="idx">#${i+1}</span><input type="text" inputmode="decimal" data-umidx="${i}" class="${cls}" value="${fmtNum(v)}" /></div>`}).join("")}
+    function openFreeEditModal(){
+        const st=calcState(inputs),um=getUnmatchedData(),t=getTianState(inputs,st),fields=[
+            {key:'dongBase',label:'洞基数',val:dongBase,dec:0},
+            {key:'ma',label:'口',val:st.ma,dec:0},
+            {key:'maPing',label:'口盈',val:st.maPing,dec:2},
+            {key:'fan',label:'流水',val:st.fan,dec:2},
+            {key:'dong',label:'洞',val:st.dong,dec:2},
+            {key:'sheng',label:'庄',val:st.sheng,dec:0},
+            {key:'ri',label:'闲',val:st.ri,dec:0},
+            {key:'longxia',label:'胜',val:st.longxia,dec:0},
+            {key:'yingSheng',label:'庄应多',val:st.yingSheng,dec:4},
+            {key:'f',label:'盈',val:st.f,dec:2},
+            {key:'pingLi',label:'均盈',val:st.pingLi,dec:2},
+            {key:'strength',label:'码差',val:um.strength,dec:2},
+            {key:'shengPct',label:'胜率',val:st.shengPct,dec:2},
+            {key:'maxZuiLi',label:'最盈',val:st.maxZuiLi,dec:2},
+            {key:'minZuiPa',label:'最亏',val:st.minZuiPa,dec:2},
+            {key:'maxHuiChe',label:'回撤',val:st.maxHuiChe,dec:1},
+            {key:'maxShengDuo',label:'庄最多',val:st.maxShengDuo,dec:0},
+            {key:'maxRiDuo',label:'闲最多',val:st.maxRiDuo,dec:0},
+            {key:'daSheng',label:'庄连',val:st.daSheng,dec:0},
+            {key:'daRi',label:'闲连',val:st.daRi,dec:0},
+            {key:'dangSheng',label:'当庄',val:st.dangSheng,dec:0},
+            {key:'dangRi',label:'当闲',val:st.dangRi,dec:0},
+            {key:'tianMa',label:'今口',val:t.tianMa,dec:0},
+            {key:'tianMaPing',label:'今口盈',val:t.tianMaPing,dec:2},
+            {key:'tianFan',label:'今流水',val:t.tianFan,dec:2},
+            {key:'tianDong',label:'今洞',val:t.tianDong,dec:2},
+            {key:'tianSheng',label:'今庄',val:t.tianSheng,dec:0},
+            {key:'tianRi',label:'今闲',val:t.tianRi,dec:0},
+            {key:'tianLongxia',label:'今胜',val:t.tianLongxia,dec:0},
+            {key:'tianYingSheng',label:'今庄应多',val:t.tianYingSheng,dec:4},
+            {key:'tianF',label:'今盈',val:t.tianF,dec:2},
+            {key:'tianPingLi',label:'今均盈',val:t.tianPingLi,dec:2},
+            {key:'tianStrength',label:'今码差',val:t.tianStrength,dec:2},
+            {key:'tianShengPct',label:'今胜率',val:t.tianShengPct,dec:2}
+        ],grid=$("freeEditGrid");
+        grid.innerHTML=fields.map(f=>`<div class="state-edit-item"><label>${f.label}</label><input type="text" inputmode="decimal" data-key="${f.key}" data-dec="${f.dec}" value="${fmtNum(f.val,f.dec)}" /></div>`).join("");
+        detailCleared=false;
+        const listEl=$("detailEditList"),badge=$("detailCountBadge");
+        if(badge)badge.textContent=String(inputs.length);
+        if(inputs.length===0){listEl.innerHTML='<div class="detail-edit-empty">暂无明细记录</div>'}
+        else{
+            const MAXSHOW=10,startIdx=Math.max(0,inputs.length-MAXSHOW);let html="";
+            if(startIdx>0)html+=`<div class="detail-edit-more">仅显示最近 ${MAXSHOW} 条（更早的 ${startIdx} 条不在此处编辑，但会保留）</div>`;
+            for(let i=inputs.length-1;i>=startIdx;i--){const cls=inputs[i]>0?"pos":"neg";html+=`<div class="detail-edit-row"><span class="idx">#${i+1}</span><input type="text" inputmode="decimal" data-idx="${i}" class="${cls}" value="${fmtNum(inputs[i])}" /></div>`}
+            listEl.innerHTML=html
+        }
+        const sorted=sortUnmatchedForDisplay(um.unmatched);
+        renderUmEditList(sorted.map(it=>it.orig));
+        $("freeEditModal").classList.add("show")
+    }
+    function closeFreeEditModal(){$("freeEditModal").classList.remove("show")}
+    function saveFreeEdit(){
+        const els=$$("#freeEditGrid input[data-key]"),edited={};
+        for(const inp of els){
+            const key=inp.dataset.key,num=parseFloat(inp.value.trim());
+            if(isNaN(num)){toast(`「${key}」不是有效数字`);return}
+            edited[key]=num
+        }
+        let newInputs;
+        if(detailCleared){toast("请使用主界面清空或导入替换明细");return}
+        else{
+            newInputs=inputs.slice();
+            const detailEls=$$("#detailEditList input[data-idx]");
+            for(const inp of detailEls){
+                const idx=parseInt(inp.dataset.idx,10),num=parseFloat(inp.value.trim());
+                if(isNaN(num)){toast(`第 ${idx+1} 条记录不是有效数字`);return}
+                if(num===0){toast(`第 ${idx+1} 条记录不能为 0`);return}
+                newInputs[idx]=num
+            }
+        }
+        const umVals=readUmEditList();
+        for(let i=0;i<umVals.length;i++){if(umVals[i]===0){toast(`未抵消第 ${i+1} 项必须为非零数字`);return}}
+        const originalUm=getUnmatchedData(),origOrigs=sortUnmatchedForDisplay(originalUm.unmatched).map(it=>it.orig),newOrigs=sortOrigsForDisplay(umVals);
+        let itemsChanged=(origOrigs.length!==newOrigs.length);
+        if(!itemsChanged){for(let i=0;i<origOrigs.length;i++){if(Math.abs(origOrigs[i]-newOrigs[i])>1e-9){itemsChanged=true;break}}}
+        const newStrength=edited.strength,strengthChanged=Math.abs((newStrength||0)-(originalUm.strength||0))>1e-9;
+        const newBase={sheng:Math.max(0,Math.round(edited.sheng)),ri:Math.max(0,Math.round(edited.ri)),dangSheng:Math.max(0,Math.round(edited.dangSheng)),dangRi:Math.max(0,Math.round(edited.dangRi)),daSheng:Math.max(0,Math.round(edited.daSheng)),daRi:Math.max(0,Math.round(edited.daRi)),maxShengDuo:Math.max(0,Math.round(edited.maxShengDuo)),maxRiDuo:Math.max(0,Math.round(edited.maxRiDuo)),f:edited.f,tf:0,fan:Math.abs(edited.fan),dong:edited.dong,lastSign:edited.dangSheng>0?1:(edited.dangRi>0?-1:0),maxZuiLi:edited.maxZuiLi,minZuiPa:edited.minZuiPa,maxHuiChe:Math.round(edited.maxHuiChe),ma:Math.max(0,Math.round(edited.ma)),longxia:Math.round(edited.longxia),yingSheng:edited.yingSheng,pingLi:edited.pingLi,shengPct:edited.shengPct,maPing:edited.maPing,_freeze:true,_frozenAt:newInputs.length};
+        baseState=newBase;
+        inputs=newInputs;
+        
+        if(edited.hasOwnProperty('dongBase')){
+            dongBase=edited.dongBase;
+            const dInput=$("dongInput");
+            if(dInput)dInput.value=dongBase>0?dongBase:'';
+        }
+        tianBase={
+            sheng:parseInt(edited.tianSheng)||0,
+            ri:parseInt(edited.tianRi)||0,
+            f:parseFloat(edited.tianF)||0,
+            fan:parseFloat(edited.tianFan)||0,
+            dong:parseFloat(edited.tianDong)||0,
+            strength:parseFloat(edited.tianStrength)||0
+        };
+        tianStartIndex=newInputs.length;
+
+        if(itemsChanged||strengthChanged){unmatchedOverride={items:umVals.map(o=>({orig:o})),strength:newStrength}}
+        if(detailCleared){detailTianArchive=[]}
+        else{
+            const arr=detailTianArchive.slice();
+            for(let i=tianStartIndex;i<newInputs.length;i++){arr[i]=null}
+            detailTianArchive=arr
+        }
+        outputHistory=[];redoStack=[];clearPreview();rebuild();closeFreeEditModal();toast("已保存 · 原有数据全部保留")
+    }
+
+    function processNumber(x){if(typeof x!=="number"||isNaN(x)||x===0){toast("请输入非零数值");return}inputs.push(x);redoStack=[];const st=calcState(inputs),um=getUnmatchedData(),t=getTianState(inputs,st),out=formatOutput(st,um.strength,t);outputHistory.push(out);const glow=$("screenGlow");if(glow){glow.className="screen-glow";void glow.offsetWidth;glow.classList.add(x>0?"red":"green");if(glow.timer)clearTimeout(glow.timer);glow.timer=setTimeout(()=>{glow.classList.add("fade-out");setTimeout(()=>{glow.className="screen-glow";if(Math.abs(st.longxia)===1||Math.abs(t.tianLongxia)===1){flashPurpleGlow(2000)}},500)},2000)}else{if(Math.abs(st.longxia)===1||Math.abs(t.tianLongxia)===1){flashPurpleGlow(2000)}}if(st.longxia===0||t.tianLongxia===0){vibrate();bubbleToast("<span>0</span>",1000)}if(st.dangRi>=5){vibrate();bubbleToast(`<span class="neg">-${st.dangRi}</span>`,2000)}if(st.dangSheng>=5){vibrate();bubbleToast(`<span class="pos">${st.dangSheng}</span>`,2000)}let checkHtml="";if(inputs.length%10===0&&inputs.length>0){const result=doCheck(3);if(result.ok)checkHtml=`<div class="check-msg ok">ok</div>`;else{checkHtml=`<div class="check-msg error">${result.msg}</div>`;checkHtml+=`<div class="output-card" style="margin-top:8px;min-height:auto">${result.correctHtml}</div>`}}renderOutput(checkHtml);save();if(inputs.length>0&&inputs.length%AUTO_EXPORT_COUNT===0){setTimeout(autoExport,300)}}
+
+    function undo(){
+        clearPreview();
+        if(inputs.length===0){toast("没有可撤销的输入");return}
+        const removed={value:inputs.pop(),archive:detailTianArchive.pop()||null,marks:detailMarks.pop()||null,tianStartIndex,tianClearMark,tianBase:{...tianBase},positions:tianClearPositions.map(p=>typeof p==='object'?{...p}:p)};
+        outputHistory.pop();
+        redoStack.push(removed);
+        
+        if(inputs.length < tianStartIndex) {
+            tianStartIndex = inputs.length;
+            tianClearPositions = tianClearPositions.filter(p => (typeof p === 'object' ? p.pos : p) <= inputs.length);
+            tianClearMark = tianStartIndex > 0 ? tianStartIndex + 1 : 0;
+            tianBase = { sheng:0, ri:0, f:0, fan:0, dong:0, strength:0 };
+        }
+        
+        renderOutput();save();toast("已撤销")
+    }
+    function redo(){clearPreview();if(redoStack.length===0){toast("没有可重做的记录");return}const entry=redoStack.pop(),x=typeof entry==="number"?entry:entry.value;inputs.push(x);if(typeof entry==="object"){detailTianArchive[inputs.length-1]=entry.archive;detailMarks[inputs.length-1]=entry.marks;tianStartIndex=entry.tianStartIndex;tianClearMark=entry.tianClearMark;tianBase={...entry.tianBase};const m=new Map(tianClearPositions.map(p=>[typeof p==='object'?p.pos:p,p]));entry.positions.forEach(p=>m.set(typeof p==='object'?p.pos:p,p));tianClearPositions=Array.from(m.values())}const st=calcState(inputs),um=getUnmatchedData(),t=getTianState(inputs,st),out=formatOutput(st,um.strength,t);outputHistory.push(out);renderOutput();save();toast("已恢复")}
+
+    function doCheck(n){const len=outputHistory.length;if(len===0)return{ok:true,msg:"无数据可检查"};const checkCount=Math.min(n,len),errors=[];for(let i=0;i<checkCount;i++){const idx=len-1-i,partial=inputs.slice(0,idx+1),st=calcState(partial),um=calcUnmatched(partial),t=getTianState(partial,st),correct=formatOutput(st,um.strength,t),stored=outputHistory[idx];if(stored!==correct)errors.push({pos:idx+1,stored,correct})}if(errors.length===0)return{ok:true,msg:n>=20?"检查：最近20次无错误":"ok"};let msg=`检查：发现 ${errors.length} 处错误（最近${checkCount}次中）\n`;errors.forEach(e=>{msg+=`\n第${e.pos}次输出有误`});const st=calcState(inputs),um=getUnmatchedData(),t=getTianState(inputs,st),latestCorrect=formatOutput(st,um.strength,t);return{ok:false,msg,correctHtml:renderText(latestCorrect),latestCorrect}}
+    function renderText(txt){return`<pre style="white-space:pre-wrap;font-family:inherit;font-size:12px;line-height:1.5;color:var(--text);margin:0">${txt}</pre>`}
+    function manualCheck(){clearPreview();const result=doCheck(20);let checkHtml="";if(result.ok)checkHtml=`<div class="check-msg ok">${result.msg}</div>`;else{checkHtml=`<div class="check-msg error">${result.msg.replace(/\n/g,"<br>")}</div>`;checkHtml+=`<div class="output-card" style="margin-top:8px;min-height:auto">${result.correctHtml}</div>`}renderOutput(checkHtml)}
+
+    function getExportData(){return{...packData(),note:"生日统计规则数据备份（含永久明细归档）"}}
+    function openExportModal(){$("exportText").value=JSON.stringify(getExportData(),null,2);$("exportModal").classList.add("show")}
+    function exportToFile(){const jsonStr=$("exportText").value||JSON.stringify(getExportData(),null,2);try{const blob=new Blob([jsonStr],{type:"application/json;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");a.download="shengri_backup_"+ts+".json";a.style.display="none";document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},200);toast("已触发下载，请到「下载」文件夹查看")}catch(e){toast("下载失败，请改用「复制内容」")}}
+    function copyExportText(){copyTextFrom("exportText","已复制，可粘贴到备忘录保存")}
+    function importFromFile(file){if(!file)return;const reader=new FileReader();reader.onload=function(e){applyImportData(e.target.result)};reader.onerror=function(){toast("读取文件失败")};reader.readAsText(file)}
+    function applyImportData(raw){
+        let backup=null;
+        try{
+            const data=JSON.parse(raw);if(!data||!Array.isArray(data.inputs))throw new Error("备份缺少明细数组");
+            if(data.inputs.some(x=>(typeof x!=='number'&&typeof x!=='string')||String(x).trim()===''||!Number.isFinite(Number(x))||Number(x)===0))throw new Error("明细必须是有效非零数字");
+            data.inputs=data.inputs.map(Number);
+            if(data.tianClearPositions!==undefined&&(!Array.isArray(data.tianClearPositions)||data.tianClearPositions.some(p=>!((typeof p==='number'&&Number.isInteger(p)&&p>=0)||(p&&typeof p==='object'&&Number.isInteger(p.pos)&&p.pos>=0)))))throw new Error("清零标记格式不正确");
+            backup=JSON.parse(JSON.stringify(packData()));parseData(data);$("importModal").classList.remove("show");toast("导入成功 · 共"+inputs.length+"次 · 明细与标记已按备份更新");
+        }catch(err){if(backup){try{parseData(backup)}catch(e){console.error(e)}}toast("导入失败："+(err.message||"格式不正确"),true)}
+    }
+
+    const numInput=$("numInput"),benInput=$("benInput"),dongInput=$("dongInput");
+    benInput.addEventListener("input",()=>{let val=parseFloat(benInput.value.trim());if(isNaN(val)||val<0)val=0;if(val>99999)val=99999;ben=val;benInput.value=val>0?val:'';save();refreshOutputOnly()});
+    if(dongInput){
+        dongInput.addEventListener("input",()=>{
+            let val=parseFloat(dongInput.value.trim());
+            if(isNaN(val)||val<0)val=100;
+            dongBase=val;
+            save();
+            refreshOutputOnly();
+        });
+    }
+
+    function submit(){let raw=numInput.value.trim();if(!raw)return;if(raw==="6"){vibrate();clearPreview();numInput.value="";manualCheck();return}const x=parseFloat(raw);if(isNaN(x)||x===0){vibrate();numInput.classList.add("error");setTimeout(()=>numInput.classList.remove("error"),500);toast("请输入非零数值",true);return}if(x%5!==0){vibrate();numInput.classList.add("error");setTimeout(()=>numInput.classList.remove("error"),500);flashYellowGlow(2000);playBeep(2000);warnBigToast("5、6",2000);return}vibrate();clearPreview();stopBeep();numInput.value="";processNumber(x);numInput.focus()}
+
+    bind("submitBtn",submit);
+    numInput.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit()}});
+    numInput.addEventListener("input",updatePreview);
+    bind("undoBtn",undo); bind("redoBtn",redo); bind("chartBtn",toggleChartMode); bind("panelBtn",togglePanel); bind("detailBtn",toggleDetailView); bind("unmatchedBtn",toggleUnmatchedMode); bind("hideLabelBtn",toggleHideLabels); bind("hideBenBtn",toggleHideBen); bind("microBtn",toggleMicroLabels); bind("luBtn",toggleLuMode);
+    bind("zoomInBtn",()=>setChartZoom(chartZoom*ZOOM_STEP)); bind("zoomOutBtn",()=>setChartZoom(chartZoom/ZOOM_STEP)); bind("zoomLabelBtn",()=>{setChartZoom(1);toast("曲线已重置为 100%")});
+    bind("unmatchedZoomInBtn",()=>setUnmatchedZoom(unmatchedZoom*UNMATCHED_ZOOM_STEP)); bind("unmatchedZoomOutBtn",()=>setUnmatchedZoom(unmatchedZoom/UNMATCHED_ZOOM_STEP)); bind("unmatchedZoomLabelBtn",()=>{setUnmatchedZoom(1);toast("未抵消已重置为 100%")});
+    bind("fullEditBtn",openFreeEditModal); bindClose("closeFreeEdit","freeEditModal"); bind("saveFreeEdit",saveFreeEdit);
+    bind("umAddBtn",()=>{const vals=readUmEditList();vals.push(5);renderUmEditList(vals)}); bind("umDelBtn",()=>{const vals=readUmEditList();vals.pop();renderUmEditList(vals)});
+    bind("umClearBtn",()=>{if(!confirm("确定清除未抵消区域所有数据？（保存后生效）"))return;renderUmEditList([]);toast("已清除未抵消 · 保存后生效")});
+    bind("detailClearBtn",()=>toast("明细受保护：只有清空、撤销、重做、导入可删除或替换明细及标记，此处不删除数据",true));
+    bind("resetBtn",()=>{if(!confirm("确定清空所有数据（含基线、快照、永久归档）？此操作不可恢复。"))return;inputs=[];detailMarks=[];outputHistory=[];redoStack=[];unmatchedOverride=null;tianSnapshots=[];detailTianArchive=[];tianStartIndex=0;tianClearMark=0;ben=0;benInput.value="";hideLabels=false;document.body.classList.remove('hide-labels');hideBen=false;document.body.classList.remove('hide-ben');showMicroLabels=false;document.body.classList.remove('show-micro');tianClearPositions=[];updateHideLabelBtn();updateHideBenBtn();updateMicroBtn();baseState=getBaseState();dongBase=100;dongInput.value="";tianBase={sheng:0,ri:0,f:0,fan:0,dong:0,strength:0};clearPreview();renderOutput();$("checkArea").innerHTML="";save();toast("已清空")});
+    bind("tianClearBtn",doTianClear); bind("tianSnapBtn",openTianSnapModal); bindClose("closeTianSnap","tianSnapModal");
+    bind("exportBtn",openExportModal); bindClose("closeExport","exportModal"); bind("doExport",exportToFile); bind("copyExport",copyExportText);
+    bind("exportDetailBtn",openExportDetailModal); bindClose("closeExportDetail","exportDetailModal"); bind("applyRangeBtn",generateExportDetail);
+    bind("copyExportSymbols",()=>copyTextFrom("exportDetailSymbols","已复制符号")); bind("copyExportValues",()=>copyTextFrom("exportDetailValues","已复制数值"));
+    bind("doExportSymbols",()=>{const text=$("exportDetailSymbols").value,ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");downloadText(text,"symbols_"+ts+".txt")});
+    bind("doExportValues",()=>{const text=$("exportDetailValues").value,ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");downloadText(text,"values_"+ts+".txt")});
+    bind("importBtn",()=>{$("importText").value="";$("importModal").classList.add("show")}); bindClose("closeImport","importModal"); bind("pickFileBtn",()=>$("fileInput").click()); bind("doImportText",()=>{const raw=$("importText").value.trim();if(!raw){toast("请先粘贴备份内容");return}applyImportData(raw)});
+    $("fileInput").addEventListener("change",e=>{const file=e.target.files[0];if(file)importFromFile(file);e.target.value=""});
+    
+    $$(".modal-overlay").forEach(el=>{el.addEventListener("click",e=>{if(e.target===el){vibrate();el.classList.remove("show")}})});
+    $("recentDetail").addEventListener("scroll",()=>{if(detailLock)return;renderDetailRows()});
+    window.addEventListener("resize",()=>{renderChart();if(viewState===1)renderRecentDetail();adjustFontSize()});
+    
+    load();
+    document.documentElement.style.setProperty("--chart-zoom",String(chartZoom));
+    document.documentElement.style.setProperty("--unmatched-zoom",String(unmatchedZoom));
+    applyChartMode();updateZoomUI();updateUnmatchedZoomUI();renderOutput();renderChart();refreshUnmatchedPreview();applyViewState();updateHideLabelBtn();updateHideBenBtn();updateMicroBtn();
+    
+    document.addEventListener("touchend",e=>{const now=Date.now();if(now-lastTouch<=300)e.preventDefault();lastTouch=now},{passive:false});
+    if('serviceWorker'in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}
+    </script>
+  <div id="bacModal" role="dialog" aria-modal="true" aria-labelledby="bacTitle">
+    <div class="bac-box" tabindex="-1">
+      <h2 id="bacTitle">八副牌 · 庄家概率计算</h2>
+      <div id="bacEVNotice" role="status" aria-live="polite" aria-atomic="true" data-state="unknown">尚未计算，暂无有效期望值提示。</div>
+      <p class="bac-note">标准百家乐补牌；8 × 52 = 416 张。不看花色。A=1，2–9按面值；10/J/Q/K=0（合并128张）。牌靴与主明细独立。</p>
+      <div id="bacSummary">
+      </div>
+      <div id="bacCounts">
+      </div>
+      <h3>输入上一局的完整手牌</h3>
+      <p class="bac-note">按发到各手的顺序输入，用空格或逗号分隔。例：闲 A 2 3，庄 A 2 4。不能只输入点数合计，每局只提交一次。</p>
+      <label>闲家（2或3张）<input id="bacPlayer" placeholder="例：A 2 3" autocomplete="off" />
+    </label>
+    <label>庄家（2或3张）<input id="bacBanker" placeholder="例：A 2 4" autocomplete="off" />
+  </label>
+  <div class="bac-actions">
+    <button class="btn btn-primary" id="bacAdd">记录本局并计算下一局</button>
+    <button class="btn btn-secondary" id="bacRecalc">重新计算</button>
+  </div>
+  <label>庄赢佣金 %（默认5；不支持庄6半赔等特殊赔付）<input id="bacCommission" type="number" min="0" max="100" step="0.1" value="5" />
+</label>
+<div id="bacStatus" role="status" aria-live="polite">
+</div>
+<div id="bacResult">尚未计算</div>
+<h3>牌靴有利度分析</h3>
+<div id="bacAnalysis" aria-live="polite">尚未计算</div>
+<p class="bac-note">下表是按当前牌靴再假设移除一张牌，对庄注期望收益率的影响。每行独立比较，不实际扣牌；正值=改善，负值=变差，单位为百分点。改善不等于正期望。全部重新枚举，不叠加固定分值。</p>
+<div class="bac-table-wrap">
+  <table id="bacEorTable">
+    <thead>
+      <tr>
+        <th>点值</th>
+        <th>已出</th>
+        <th>剩余</th>
+        <th>再移除1张<br>EV变化(百分点)</th>
+        <th>相对影响</th>
+      </tr>
+    </thead>
+    <tbody id="bacEorBody">
+    </tbody>
+  </table>
+</div>
+<details>
+  <summary>计算依据与提醒条件</summary>
+  <p class="bac-note">EV=(1−佣金率)×P(庄胜)−P(闲胜)。绿色提醒直接按未四舍五入EV判断，不用“比新靴改善”或单看莊勝率。计算容差为每下注1单位1e-10，避免浮点零误报。相同佣金的新靴作为比较参照。5%佣金下，排除和局后的庄胜率须高于1/1.95才是正期望；佣金改变门槛随之改变。新靴移除A、2、3、4、0点牌通常改善EV，5–9通常变差；当前牌靴以即时重算为准。少于7张不算再移除效果，不足6张停止计算。提醒不自动下注。</p>
+</details>
+<p class="bac-note">假设剩余牌均匀随机、不放回。模型正期望不是下一局结果预测，不保证盈利。漏记、未知烧牌、连续洗牌、换靴未重置或特殊赔付会使模型与实况不符；和局退回庄注。</p>
+<details>
+  <summary>已知烧牌／额外移除牌</summary>
+  <p class="bac-note">只录入不在手牌中的已知移除牌，不要重复录入。未知牌不要猜填；本版不对未知烧牌或切牌停发作精确建模。</p>
+  <label>已知移除牌<input id="bacExtra" placeholder="例：K 7 10" />
+</label>
+<button class="btn btn-secondary" id="bacAddExtra">扣除这些已知牌</button>
+</details>
+<h3>当前牌靴记录（与主明细独立）</h3>
+<ol id="bacHistory">
+</ol>
+<div class="bac-actions">
+  <button class="btn btn-warn" id="bacUndo">撤回最后一笔算牌记录</button>
+  <button class="btn btn-danger" id="bacReset">换新靴（仅算牌）</button>
+</div>
+<details>
+  <summary>算牌独立备份／恢复</summary>
+  <p class="bac-note">主界面导数据不包含独立牌靴，请在此备份。恢复只替换算牌记录，不操作主明细。</p>
+  <textarea id="bacShoeJson" placeholder="算牌专用JSON备份">
+  </textarea>
+  <div class="bac-actions">
+    <button class="btn btn-secondary" id="bacExport">生成并下载算牌备份</button>
+    <button class="btn btn-secondary" id="bacImport">恢复算牌备份</button>
+  </div>
+</details>
+<div class="bac-actions">
+  <button class="btn btn-secondary" id="bacClose">关闭</button>
+</div>
+</div>
+</div>
+<button id="bacPositiveToast" type="button" hidden aria-live="polite" aria-atomic="true" title="点击关闭提示">
+</button>
+<script>
+
+(function(){
+'use strict';
+const KEY='shengri_baccarat_8deck_v1',BASE=[128,32,32,32,32,32,32,32,32,32],EV_EPS=1e-10;
+const FRESH={banker:0.458597422632763,player:0.44624660934359683,tie:0.0951559680236402};
+const el=id=>document.getElementById(id),copy=x=>JSON.parse(JSON.stringify(x));
+function bankerDraw(b,p3){return p3===null?b<=5:b<=2||(b===3&&p3!==8)||(b===4&&p3>=2&&p3<=7)||(b===5&&p3>=4&&p3<=7)||(b===6&&(p3===6||p3===7))}
+function parseCards(text){const tokens=text.trim().toUpperCase().replace(/[,，;；、\n\r\t]+/g,' ').split(/\s+/).filter(Boolean);return tokens.map(t=>{if(!/^(A|[0-9]|10|T|J|Q|K)$/.test(t))throw Error('不能识别牌：'+t+'。请用空格分隔，如 A 10 K。');return t==='A'?1:('TJQK'.includes(t)||t==='10')?0:Number(t)})}
+function validateRound(p,b){
+ if(![2,3].includes(p.length)||![2,3].includes(b.length))throw Error('闲、庄各需输入2或3张牌');const pt=(p[0]+p[1])%10,bt=(b[0]+b[1])%10;
+ if(pt>=8||bt>=8){if(p.length!==2||b.length!==2)throw Error('任一方前两张为8或9（天牌），双方都不能补牌')}
+ else{const pd=pt<=5;if(p.length!==(pd?3:2))throw Error(pd?'闲前两张0–5点必须补第三张':'闲前两张6–7点不能补牌');const bd=bankerDraw(bt,pd?p[2]:null);if(b.length!==(bd?3:2))throw Error(bd?'按补牌表，庄必须补第三张':'按补牌表，庄不能补第三张')}
+ const pf=p.reduce((a,x)=>a+x,0)%10,bf=b.reduce((a,x)=>a+x,0)%10;return bf>pf?'庄胜':bf<pf?'闲胜':'和局';
+}
+function exactOdds(source){
+ const c=source.slice(),n=c.reduce((a,b)=>a+b,0);if(n<6)throw Error('剩余不足6张，不计算下一局');let B=0,P=0,T=0,leaves=0;
+ function settle(p,b,w){if(b>p)B+=w;else if(b<p)P+=w;else T+=w;leaves++}
+ function finish(p,b,p3,w,left){const draw=p3===null?b<=5:b<=2||(b===3&&p3!==8)||(b===4&&p3>=2&&p3<=7)||(b===5&&p3>=4&&p3<=7)||(b===6&&(p3===6||p3===7));if(!draw){settle(p,b,w);return}for(let z=0;z<10;z++)if(c[z]>0)settle(p,(b+z)%10,w*c[z]/left)}
+ for(let a=0;a<10;a++)if(c[a]>0){const wa=c[a]/n;c[a]--;for(let b=0;b<10;b++)if(c[b]>0){const wb=wa*c[b]/(n-1);c[b]--;for(let d=0;d<10;d++)if(c[d]>0){const wd=wb*c[d]/(n-2);c[d]--;for(let e=0;e<10;e++)if(c[e]>0){const w=wd*c[e]/(n-3);c[e]--;const p=(a+d)%10,q=(b+e)%10;if(p>=8||q>=8)settle(p,q,w);else if(p>=6)finish(p,q,null,w,n-4);else for(let f=0;f<10;f++)if(c[f]>0){const wf=w*c[f]/(n-4);c[f]--;finish((p+f)%10,q,f,wf,n-5);c[f]++}c[e]++}c[d]++}c[b]++}c[a]++}
+ const sum=B+P+T;if(!Number.isFinite(sum)||Math.abs(sum-1)>1e-8)throw Error('概率完整性校验失败');return {banker:B/sum,player:P/sum,tie:T/sum,sum,leaves};
+}
+function analyzeShoe(source){const r=exactOdds(source);r.removals=Array(10).fill(null);if(source.reduce((a,b)=>a+b,0)>=7){for(let v=0;v<10;v++)if(source[v]>0){const c=source.slice();c[v]--;r.removals[v]=exactOdds(c)}}return r}
+function fresh(){return {version:1,decks:8,shoeId:new Date().toISOString(),commission:5,events:[]}}
+function checkState(raw){
+ if(!raw||raw.version!==1||raw.decks!==8||!Array.isArray(raw.events)||raw.events.length>416)throw Error('不是有效的八副牌算牌备份');if(!Number.isFinite(raw.commission)||raw.commission<0||raw.commission>100)throw Error('佣金必须在0–100%');const counts=BASE.slice(),events=[];
+ for(const e of raw.events){if(!e||!['round','extra'].includes(e.kind))throw Error('算牌记录类型错误');const valid=a=>Array.isArray(a)&&a.every(x=>Number.isInteger(x)&&x>=0&&x<=9);let cards;
+  if(e.kind==='round'){if(!valid(e.p)||!valid(e.b))throw Error('手牌格式错误');validateRound(e.p,e.b);cards=e.p.concat(e.b)}else{if(!valid(e.cards)||e.cards.length===0)throw Error('额外移除牌格式错误');cards=e.cards}
+  for(const v of cards)if(--counts[v]<0)throw Error((v===0?'10/J/Q/K':v)+' 剩余张数不足，不能重复扣牌');events.push(e.kind==='round'?{kind:'round',p:e.p.slice(),b:e.b.slice()}:{kind:'extra',cards:e.cards.slice()});
+ }return {state:{version:1,decks:8,shoeId:typeof raw.shoeId==='string'?raw.shoeId:new Date().toISOString(),commission:raw.commission,events},counts};
+}
+let state=fresh(),counts=BASE.slice(),badStorage=false,last=null,worker=null,job=0,lastFocus=null,lastConfirmedPositive=false,alertCount=0,toastTimer=null;
+function status(t){el('bacStatus').textContent=t}
+function hidePositiveToast(){if(toastTimer)clearTimeout(toastTimer);toastTimer=null;el('bacPositiveToast').hidden=true}
+function clearIndicator(message,kind='pending'){hidePositiveToast();el('bacOpen').classList.remove('bac-positive');el('bacOpen').setAttribute('aria-label','牌');el('bacEVNotice').dataset.state=kind;el('bacEVNotice').textContent=message}
+function unavailable(message){lastConfirmedPositive=false;clearIndicator(message,'unavailable')}
+function updateEVAlert(r){
+ const ev=(1-state.commission/100)*r.banker-r.player;if(!Number.isFinite(ev)){unavailable('期望值无效，暂无提醒');return}
+ const positive=ev>EV_EPS,negative=ev < -EV_EPS,pc=ev*100;
+ const value=positive&&pc<0.000001?'>0且小于0.000001%':(pc>0?'+':'')+pc.toFixed(6)+'%';
+ const notice=el('bacEVNotice');notice.dataset.state=positive?'positive':negative?'negative':'neutral';
+ notice.textContent=positive?'模型内：庄注正期望\n期望收益率 '+value+'；佣金 '+state.commission+'%。\n以当前已记录牌靴为条件，不保证盈利，不会自动下注。':negative?'目前庄注为负期望：'+value+'。\n比新靴改善不等于正期望。':'目前庄注接近零期望，不触发正期望提醒。';
+ el('bacOpen').classList.toggle('bac-positive',positive);el('bacOpen').setAttribute('aria-label',positive?'牌：模型内庄注正期望':'牌');
+ if(positive&&!lastConfirmedPositive){alertCount++;hidePositiveToast();el('bacPositiveToast').textContent='模型内庄注转为正期望\nEV收益率 '+value+'（佣金 '+state.commission+'%）\n仅为模型计算，不保证盈利；点击可关闭。';el('bacPositiveToast').hidden=false;toastTimer=setTimeout(hidePositiveToast,7000)}
+ else if(!positive)hidePositiveToast();lastConfirmedPositive=positive;
+}
+try{const raw=localStorage.getItem(KEY);if(raw){const checked=checkState(JSON.parse(raw));state=checked.state;counts=checked.counts}}
+catch(e){badStorage=true;status('本地算牌记录读取失败，未覆盖旧数据。请先导出原始内容，恢复有效备份或点换新靴。');try{el('bacShoeJson').value=localStorage.getItem(KEY)||''}catch(_){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state));return true}catch(e){status('警告：无法保存本地牌靴！本次仅在内存中，关闭前请用独立备份导出。');return false}}
+function stop(){job++;if(worker){worker.terminate();worker=null}last=null;clearIndicator('正在重新计算，旧提醒已清除……');el('bacResult').textContent='牌靴已更新，正在计算……';el('bacAnalysis').textContent='正在重新枚举当前牌靴及各点值的单张移除效果……';el('bacEorBody').replaceChildren()}
+function showResult(r){
+ last=r;const pct=x=>(x*100).toFixed(6)+'%',c=state.commission/100,ev=o=>(1-c)*o.banker-o.player,current=ev(r),baseline=ev(FRESH),difference=current-baseline;
+ el('bacResult').textContent='下一局庄胜（含和局在分母）：'+pct(r.banker)+'\n下一局闲胜：'+pct(r.player)+'\n下一局和局（庄注退回）：'+pct(r.tie)+'\n排除和局后的庄胜率：'+((r.banker+r.player)>0?pct(r.banker/(r.banker+r.player)):'不适用（模型下全部为和局）')+'\n庄注期望净收益／每下注1单位：'+current.toFixed(6)+'\n对应收益率：'+pct(current)+'（佣金'+state.commission+'%）\n算法：不放回、补牌路径完全枚举，非随机模拟';
+ const signed=x=>(x>=0?'+':'')+(x*100).toFixed(6),direction=Math.abs(difference)<EV_EPS?'与新靴近乎相同':difference>0?'较新靴改善':'较新靴变差',level=Math.abs(current)<=EV_EPS?'接近零期望':current>0?'模型内为正期望（不保证单局或短期盈利）':'仍为负期望';
+ el('bacAnalysis').textContent='当前庄注EV：'+pct(current)+'\n同佣金新靴EV：'+pct(baseline)+'\n相对新靴：'+signed(difference)+' 个百分点，'+direction+'\n'+level+'\n每下注100单位，期望净收益：'+(current*100).toFixed(6)+'单位\n已按全部剩余牌综合重算，不是固定分值相加。';
+ const body=el('bacEorBody');body.replaceChildren();for(let v=0;v<10;v++){const after=r.removals&&r.removals[v],delta=after?ev(after)-current:null,note=counts[v]===0?'已无此牌':delta===null?'剩余不足7张':Math.abs(delta)<EV_EPS?'近乎不变':delta>0?'庄注EV改善':'庄注EV变差';const tr=document.createElement('tr');tr.dataset.point=String(v);if(delta!==null)tr.dataset.delta=String(delta);[v===0?'0（10/J/Q/K）':v===1?'A':String(v),String(BASE[v]-counts[v]),String(counts[v]),delta===null?'—':signed(delta),note].forEach((text,i)=>{const td=document.createElement('td');td.textContent=text;if(i>=3&&delta!==null)td.className=delta>0?'bac-up':delta<0?'bac-down':'';tr.append(td)});body.append(tr)}
+ updateEVAlert(r);
+}
+function calculate(){
+ stop();const id=job;if(badStorage){el('bacResult').textContent='本地牌靴损坏，需先恢复或换新靴';el('bacAnalysis').textContent='恢复有效牌靴后才能分析';unavailable('牌靴无效，正期望提醒已停用');return}
+ const source=counts.slice(),n=source.reduce((a,b)=>a+b,0);if(n<6){el('bacResult').textContent='剩余不足6张，停止计算；请确认是否已经换靴';el('bacAnalysis').textContent='剩余牌不足，不能分析';unavailable('剩余不足6张，无法判断正期望');return}
+ const failed=e=>{status(e.message||String(e));unavailable('计算失败，正期望提醒已停用')};
+ const runFallback=()=>{setTimeout(()=>{if(id!==job)return;let result;try{result=exactOdds(source);result.removals=Array(10).fill(null)}catch(e){failed(e);return}let v=0;function next(){if(id!==job)return;try{if(n<7||v>=10){showResult(result);return}const point=v++;if(source[point]>0){const c=source.slice();c[point]--;result.removals[point]=exactOdds(c)}setTimeout(next,0)}catch(e){failed(e)}}next()},30)};
+ try{const code='const exactOdds='+exactOdds.toString()+';const analyzeShoe='+analyzeShoe.toString()+';self.onmessage=e=>{try{self.postMessage({result:analyzeShoe(e.data)})}catch(x){self.postMessage({error:x.message})}};';const url=URL.createObjectURL(new Blob([code],{type:'text/javascript'}));try{worker=new Worker(url)}finally{URL.revokeObjectURL(url)}worker.onmessage=e=>{if(id!==job)return;worker.terminate();worker=null;if(e.data.error)failed(Error(e.data.error));else showResult(e.data.result)};worker.onerror=()=>{if(id!==job)return;if(worker)worker.terminate();worker=null;runFallback()};worker.postMessage(source)}catch(e){runFallback()}
+}
+function render(){el('bacCommission').value=state.commission;const remaining=counts.reduce((a,b)=>a+b,0),rounds=state.events.filter(e=>e.kind==='round').length;el('bacSummary').textContent='已记录 '+rounds+' 局 · 已移除 '+(416-remaining)+' 张 · 剩余 '+remaining+' / 416 张';el('bacCounts').replaceChildren();counts.forEach((n,i)=>{const x=document.createElement('span');x.textContent=(i===0?'0点':i===1?'A':i)+'：'+n;el('bacCounts').append(x)});el('bacHistory').replaceChildren();state.events.forEach((e,i)=>{const li=document.createElement('li'),fmt=a=>a.map(x=>x===0?'0':x===1?'A':x).join(' ');li.textContent='#'+(i+1)+' '+(e.kind==='round'?'闲 '+fmt(e.p)+' / 庄 '+fmt(e.b)+' → '+validateRound(e.p,e.b):'额外移除 '+fmt(e.cards));el('bacHistory').append(li)})}
+function commit(next){const checked=checkState(next);if(checked.state.shoeId!==state.shoeId)lastConfirmedPositive=false;state=checked.state;counts=checked.counts;badStorage=false;status('');render();const stored=save();calculate();if(!stored)status('警告：本地储存失败，关闭前请导出算牌备份。')}
+function addEvent(e){if(badStorage)throw Error('请先处理损坏的本地算牌记录');const next=copy(state);next.events.push(e);commit(next)}
+function action(id,fn){el(id).addEventListener('click',()=>{try{fn()}catch(e){status(e.message)}})}
+function open(){lastFocus=document.activeElement;el('bacModal').classList.add('bac-open');render();el('bacPlayer').focus();calculate()}
+function close(){el('bacModal').classList.remove('bac-open');if(lastFocus)lastFocus.focus()}
+action('bacOpen',open);action('bacClose',close);action('bacRecalc',calculate);action('bacPositiveToast',hidePositiveToast);
+action('bacAdd',()=>{const p=parseCards(el('bacPlayer').value),b=parseCards(el('bacBanker').value);validateRound(p,b);addEvent({kind:'round',p,b});el('bacPlayer').value='';el('bacBanker').value='';el('bacPlayer').focus()});
+action('bacAddExtra',()=>{const cards=parseCards(el('bacExtra').value);if(!cards.length)throw Error('请先输入已知移除牌');addEvent({kind:'extra',cards});el('bacExtra').value=''});
+action('bacUndo',()=>{if(badStorage)throw Error('请先恢复牌靴');if(!state.events.length)throw Error('没有算牌记录可撤回');if(!confirm('只撤回最后一笔算牌记录，并把牌加回当前牌靴？不会更改主明细。'))return;const next=copy(state);next.events.pop();commit(next)});
+action('bacReset',()=>{if(!confirm('将算牌牌靴换为全新八副牌？当前算牌记录会清空，主明细及标记不变。'))return;const next=fresh();next.commission=state.commission;commit(next);el('bacPlayer').value='';el('bacBanker').value='';el('bacExtra').value=''});
+el('bacCommission').addEventListener('change',()=>{try{if(badStorage)throw Error('请先恢复牌靴');const v=Number(el('bacCommission').value);if(el('bacCommission').value.trim()===''||!Number.isFinite(v)||v<0||v>100)throw Error('佣金必须为0–100%');state.commission=v;save();if(last)showResult(last)}catch(e){el('bacCommission').value=state.commission;status(e.message)}});
+action('bacExport',()=>{const text=badStorage?(localStorage.getItem(KEY)||''):JSON.stringify(state,null,2);el('bacShoeJson').value=text;const url=URL.createObjectURL(new Blob([text],{type:'application/json;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='baccarat_8deck_'+Date.now()+'.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)});
+action('bacImport',()=>{const checked=checkState(JSON.parse(el('bacShoeJson').value));if(!confirm('用此算牌备份替换当前算牌牌靴？主明细不会改变。'))return;commit(checked.state)});
+el('bacModal').addEventListener('click',e=>{if(e.target===el('bacModal'))close()});el('bacModal').addEventListener('keydown',e=>{if(e.key==='Escape'){close();return}if(e.key==='Tab'){const nodes=Array.from(el('bacModal').querySelectorAll('button,input,textarea,summary')).filter(x=>x.getClientRects().length&&!x.disabled),first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
+window.BaccaratCounter=Object.freeze({exactOdds,analyzeShoe,parseCards,validateRound,bankerDraw,getState:()=>copy(state),getCounts:()=>counts.slice(),getAnalysis:()=>last?copy(last):null,getAlertState:()=>({positive:lastConfirmedPositive,notice:el('bacEVNotice').dataset.state,alertCount,epsilon:EV_EPS})});render();
+})();
+
+</script>
+</body>
+</html>
